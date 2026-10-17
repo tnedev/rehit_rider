@@ -30,6 +30,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val power = ride.power
     val cues = ride.cues
     val health = ride.health
+    val sync = ride.sync
 
     val settings: StateFlow<Settings> = repo.settings
     val profiles = repo.profiles.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -74,7 +75,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         repo.saveProfile(p.copy(healthSync = on))
     }
 
-    fun deleteProfile(p: Profile) = viewModelScope.launch { repo.deleteProfile(p) }
+    fun deleteProfile(p: Profile) = viewModelScope.launch { sync.unlinkProfile(p.id); repo.deleteProfile(p) }
 
     fun updateSettings(s: Settings) {
         repo.updateSettings(s)

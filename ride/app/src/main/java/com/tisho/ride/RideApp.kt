@@ -7,6 +7,7 @@ import com.tisho.ride.data.Repository
 import com.tisho.ride.data.RideDb
 import com.tisho.ride.health.HealthSync
 import com.tisho.ride.hr.HeartRateMonitor
+import com.tisho.ride.sync.SyncServer
 import com.tisho.ride.workout.Cues
 
 class RideApp : Application() {
@@ -16,6 +17,7 @@ class RideApp : Application() {
     lateinit var hrm: HeartRateMonitor
     lateinit var cues: Cues
     lateinit var health: HealthSync
+    lateinit var sync: SyncServer
 
     override fun onCreate() {
         super.onCreate()
@@ -25,6 +27,7 @@ class RideApp : Application() {
         hrm = HeartRateMonitor(this)
         cues = Cues(this)
         health = HealthSync(this)
+        sync = SyncServer(this, repo).also { it.start() }
         val s = repo.settings.value
         cues.voice = s.voice
         cues.sounds = s.sounds

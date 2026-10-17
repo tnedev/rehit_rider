@@ -228,7 +228,9 @@ fun SettingsScreen(vm: AppViewModel, nav: NavHostController) {
                     }
                 }
             }
-            SectionTitle("Google Fit & Samsung Health")
+            SectionTitle("Sync to my phone")
+            PhonePanel(vm)
+            SectionTitle("Health Connect on this tablet")
             HealthPanel(vm)
             SectionTitle("Appearance")
             Panel {
@@ -302,6 +304,45 @@ fun SettingsScreen(vm: AppViewModel, nav: NavHostController) {
         confirmButton = { TextButton(onClick = { profile?.let { scope.launch { vm.repo.deleteAllRides(it.id) } }; confirmWipe = false }) { Text("Delete", color = C.heart) } },
         dismissButton = { TextButton(onClick = { confirmWipe = false }) { Text("Cancel") } },
     )
+}
+
+@Composable
+private fun PhonePanel(vm: AppViewModel) {
+    val profile by vm.profile.collectAsState()
+    val links by vm.sync.links.collectAsState()
+    val p = profile ?: return
+    var code by remember { mutableStateOf<String?>(null) }
+    val mine = links.filter { it.profileId == p.id }
+    Panel {
+        Text(
+            "Send ${p.name.substringBefore(' ')}'s rides to their own phone's Google Fit / Samsung Health with the free " +
+                "REHIT Rider Sync app. Each phone only ever receives the rides of the rider it is linked to.",
+            color = C.muted,
+        )
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = { code = vm.sync.newCode(p.id) }, colors = ButtonDefaults.buttonColors(containerColor = C.accent)) { Text("Link a phone") }
+        for (l in mine) {
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${l.device} · linked ${com.tisho.ride.ui.fmtDay(l.createdAt)}", Modifier.weight(1f))
+                TextButton(onClick = { vm.sync.unlink(l.token) }) { Text("Unlink", color = C.heart) }
+            }
+        }
+    }
+    code?.let { c ->
+        AlertDialog(
+            onDismissRequest = { code = null },
+            title = { Text("Link ${p.name.substringBefore(' ')}'s phone") },
+            text = {
+                Column {
+                    Text("1. Install REHIT Rider Sync on the phone (same Wi-Fi as this tablet).\n2. Open it, pick this tablet and enter:", style = MaterialTheme.typography.bodyLarge)
+                    Spacer(Modifier.height(16.dp))
+                    Text(c.chunked(3).joinToString(" "), style = MaterialTheme.typography.displayMedium, color = C.accent)
+                    Text("Code valid for 10 minutes.", color = C.muted)
+                }
+            },
+            confirmButton = { TextButton(onClick = { code = null }) { Text("Done") } },
+        )
+    }
 }
 
 @Composable
