@@ -283,6 +283,7 @@ fun SettingsScreen(vm: AppViewModel, nav: NavHostController) {
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(onClick = { vm.bike.disconnect(); vm.bike.connect() }) { Text("Reconnect bike") }
+                    OutlinedButton(onClick = { openOtherHome(ctx) }) { Text("Open Android home screen") }
                 }
                 Spacer(Modifier.height(6.dp))
                 ToggleRow("Demo bike", "Simulated bike for trying the app without riding", settings.demo) {
@@ -391,4 +392,14 @@ private fun ToggleRow(title: String, sub: String, checked: Boolean, onChange: (B
         }
         Switch(checked, onChange)
     }
+}
+
+/** Leaves the app for the tablet's normal launcher (the app may be set as the home app). */
+private fun openOtherHome(ctx: android.content.Context) {
+    val pm = ctx.packageManager
+    val home = android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME)
+    val other = pm.queryIntentActivities(home, 0).firstOrNull { it.activityInfo.packageName != ctx.packageName }
+    val intent = if (other != null) android.content.Intent(home).setClassName(other.activityInfo.packageName, other.activityInfo.name)
+    else android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+    ctx.startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
 }
