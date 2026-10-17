@@ -3,6 +3,8 @@ package com.tisho.ride.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import com.tisho.ride.RideApp
 import com.tisho.ride.data.Profile
 import com.tisho.ride.data.Ride
@@ -22,6 +24,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
+private const val MIN_SAVE_SEC = 20
+
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val ride = app as RideApp
     val repo = ride.repo
@@ -93,30 +97,44 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return RideSession(viewModelScope, bike, hrm, power, p, workout, cues).also { session = it; it.start() }
     }
 
+    /** Id of the auto-saved ride for the summary screen; null while saving or when too short to keep. */
+    var savedRideId by androidx.compose.runtime.mutableStateOf<Long?>(null)
+        private set
+
+    /** Ends the ride and saves it straight away (rides under 20 s are dropped as accidental starts). */
     fun finishRide(): SessionResult? {
         val r = session?.finish() ?: return null
         session = null
         lastResult = r
+        savedRideId = null
+        if (r.ride.durationSec >= MIN_SAVE_SEC) viewModelScope.launch { savedRideId = save(r) }
         return r
     }
 
     fun discardRide() { session?.finish(); session = null; lastResult = null }
 
-    /** Saves the finished ride and applies accepted FTP / sprint adaptations. */
-    fun saveResult(r: SessionResult, rpe: Int, notes: String, applyFtp: Boolean, onSaved: (Long) -> Unit) = viewModelScope.launch {
-        val saved = r.ride.copy(rpe = rpe, notes = notes)
-        val id = repo.saveRide(saved, r.samples)
+    private suspend fun save(r: SessionResult): Long {
+        val id = repo.saveRide(r.ride, r.samples)
         // Always the rider who rode, read fresh from the database, never whoever is selected now.
-        val p = repo.db.profiles().get(saved.profileId)
-        if (p?.healthSync == true) health.write(saved, r.samples, saved.workoutName)
-        if (p != null) {
-            var np = p
-            if (applyFtp && r.newFtp != null) np = np.copy(ftpOverride = r.newFtp)
-            if (r.newSprintInnate != null) np = np.copy(sprintInnate = r.newSprintInnate)
-            if (np != p) repo.saveProfile(np)
-        }
+        val p = repo.db.profiles().get(r.ride.profileId)
+        if (p?.healthSync == true) health.write(r.ride, r.samples, r.ride.workoutName)
+        if (p != null && r.newSprintInnate != null && r.newSprintInnate != p.sprintInnate) repo.saveProfile(p.copy(sprintInnate = r.newSprintInnate))
+        return id
+    }
+
+    /** Effort rating and notes from the summary screen. */
+    fun annotateRide(id: Long, rpe: Int, notes: String) = viewModelScope.launch {
+        repo.db.rides().get(id)?.let { repo.updateRide(it.copy(rpe = rpe, notes = notes)) }
+    }
+
+    fun applyFtp(profileId: Long, ftp: Int) = viewModelScope.launch {
+        repo.db.profiles().get(profileId)?.let { repo.saveProfile(it.copy(ftpOverride = ftp)) }
+    }
+
+    fun deleteFinishedRide() {
+        savedRideId?.let { deleteRide(it) }
+        savedRideId = null
         lastResult = null
-        onSaved(id)
     }
 
     fun deleteRide(id: Long) = viewModelScope.launch { repo.deleteRide(id) }

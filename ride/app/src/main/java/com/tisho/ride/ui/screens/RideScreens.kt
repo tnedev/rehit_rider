@@ -78,7 +78,12 @@ fun SummaryScreen(vm: AppViewModel, nav: NavHostController) {
     val rides by vm.rides.collectAsState()
     var rpe by remember { mutableStateOf(0) }
     var notes by remember { mutableStateOf("") }
-    var applyFtp by remember { mutableStateOf(true) }
+    var ftpApplied by remember { mutableStateOf(false) }
+    val savedId = vm.savedRideId
+    fun done() {
+        savedId?.let { vm.annotateRide(it, rpe, notes) }
+        nav.popBackStack("home", false)
+    }
     val prs = personalRecords(r.ride, rides)
 
     Row(Modifier.fillMaxSize().padding(28.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -101,7 +106,8 @@ fun SummaryScreen(vm: AppViewModel, nav: NavHostController) {
                     r.vo2max?.let { Stat("VO₂max est.", "%.0f".format(it), Metrics.vo2Rating(it, p.age, p.sex == "F")) }
                 }
                 Text("Previous FTP: ${p.ftp} W${if (p.ftpIsEstimated) " (estimate)" else ""}", color = C.muted)
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(applyFtp, { applyFtp = it }); Text("Use as my FTP") }
+                if (ftpApplied) Text("Saved as your FTP", color = C.good)
+                else Button(onClick = { vm.applyFtp(p.id, r.newFtp); ftpApplied = true }, colors = ButtonDefaults.buttonColors(containerColor = C.accent)) { Text("Use ${r.newFtp} W as my FTP") }
             }
             if (r.newSprintInnate != null) Panel {
                 Label("Sprint coach", C.accent)
@@ -132,12 +138,18 @@ fun SummaryScreen(vm: AppViewModel, nav: NavHostController) {
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(notes, { notes = it }, label = { Text("Notes") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             }
+            Text(
+                when {
+                    r.ride.durationSec < 20 -> "Too short to keep — rides under 20 seconds aren't saved."
+                    savedId == null -> "Saving…"
+                    else -> "Saved to your history."
+                }, color = C.muted,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = { vm.discardRide(); nav.popBackStack("home", false) }, modifier = Modifier.height(56.dp)) { Text("Discard", color = C.heart) }
-                Button(
-                    onClick = { vm.saveResult(r, rpe, notes, applyFtp) { id -> nav.navigate("rides/$id") { popUpTo("home") } } },
-                    modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                ) { Text("Save ride", style = MaterialTheme.typography.titleMedium) }
+                if (savedId != null) OutlinedButton(onClick = { vm.deleteFinishedRide(); nav.popBackStack("home", false) }, modifier = Modifier.height(56.dp)) { Text("Delete ride", color = C.heart) }
+                Button(onClick = { done() }, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = C.accent)) {
+                    Text("Done", style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
     }

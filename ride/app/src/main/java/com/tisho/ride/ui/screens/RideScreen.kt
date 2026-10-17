@@ -105,7 +105,7 @@ fun RideScreen(vm: AppViewModel, nav: NavHostController) {
                 Spacer(Modifier.width(8.dp))
                 if (!open) OutlinedButton(onClick = { session.skipStep() }) { Icon(Icons.Filled.SkipNext, null) }
                 Spacer(Modifier.width(8.dp))
-                OutlinedButton(onClick = { confirmStop = true }) { Icon(Icons.Filled.Stop, null, tint = C.heart); Text(" Finish") }
+                OutlinedButton(onClick = { finish() }) { Icon(Icons.Filled.Stop, null, tint = C.heart); Text(" Finish") }
             }
             Spacer(Modifier.height(18.dp))
 
@@ -173,8 +173,8 @@ fun RideScreen(vm: AppViewModel, nav: NavHostController) {
     if (confirmStop) AlertDialog(
         onDismissRequest = { confirmStop = false },
         title = { Text("Finish ride?") },
-        text = { Text(if (st.elapsed < 60) "Rides under a minute can be discarded." else "Your ride will be saved to history.") },
-        confirmButton = { TextButton(onClick = { confirmStop = false; finish() }) { Text("Finish & review") } },
+        text = { Text(if (st.elapsed < 20) "Rides under 20 seconds aren't saved." else "Your ride is saved to history.") },
+        confirmButton = { TextButton(onClick = { confirmStop = false; finish() }) { Text("Finish") } },
         dismissButton = {
             Row {
                 TextButton(onClick = { confirmStop = false; vm.discardRide(); nav.popBackStack("home", false) }) { Text("Discard", color = C.heart) }
