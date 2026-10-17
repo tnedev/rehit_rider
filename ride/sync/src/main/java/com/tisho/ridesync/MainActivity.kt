@@ -146,7 +146,7 @@ private fun Linked(store: Store, onChange: () -> Unit, syncNow: () -> Unit) {
         granted = it.containsAll(Health.permissions)
         if (granted) syncNow()
     }
-    LaunchedEffect(Unit) { granted = Health.granted(ctx); if (granted) { syncing = true; Syncer.run(ctx); syncing = false; onChange() } }
+    LaunchedEffect(Unit) { Syncer.schedule(ctx); granted = Health.granted(ctx); if (granted) { syncing = true; Syncer.run(ctx); syncing = false; onChange() } }
 
     Card {
         Text("Linked as ${store.rider}", style = MaterialTheme.typography.titleLarge)
@@ -157,7 +157,7 @@ private fun Linked(store: Store, onChange: () -> Unit, syncNow: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Button(onClick = { scope.launch { syncing = true; Syncer.run(ctx); syncing = false; onChange() } }, enabled = granted && !syncing,
             colors = ButtonDefaults.buttonColors(containerColor = Accent)) { Text(if (syncing) "Syncing…" else "Sync now") }
-        Text("Syncs automatically every 30 minutes on Wi-Fi when the tablet app is open.", color = Muted)
+        Text("Syncs automatically about every 15 minutes and when you get home to Wi-Fi, as long as REHIT Rider is open on the tablet. Opening this app syncs straight away.", color = Muted)
     }
     Card {
         Text("Google Fit & Samsung Health", style = MaterialTheme.typography.titleLarge)

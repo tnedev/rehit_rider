@@ -198,19 +198,33 @@ object Syncer {
         return n
     }
 
+    /**
+     * Every 15 minutes (Android's minimum for background work) whenever there is a network, plus an
+     * extra pass as soon as the phone joins Wi-Fi.
+     */
     fun schedule(context: Context) {
-        val req = PeriodicWorkRequestBuilder<SyncWorker>(30, TimeUnit.MINUTES)
+        val wm = WorkManager.getInstance(context)
+        val periodic = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        wm.enqueueUniquePeriodicWork("rehit-sync", ExistingPeriodicWorkPolicy.UPDATE, periodic)
+        val onWifi = androidx.work.OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())
             .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork("rehit-sync", ExistingPeriodicWorkPolicy.KEEP, req)
+        wm.enqueueUniqueWork("rehit-sync-wifi", androidx.work.ExistingWorkPolicy.KEEP, onWifi)
     }
 
-    fun cancel(context: Context) = WorkManager.getInstance(context).cancelUniqueWork("rehit-sync")
+    fun cancel(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork("rehit-sync")
+        WorkManager.getInstance(context).cancelUniqueWork("rehit-sync-wifi")
+    }
 }
 
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         Syncer.run(applicationContext)
+        // Re-arm the "next time on Wi-Fi" pass so a ride is picked up when you get home.
+        Syncer.schedule(applicationContext)
         return Result.success()
     }
 }
