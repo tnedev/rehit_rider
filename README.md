@@ -46,6 +46,18 @@ You can work around it by stopping the kiosk app with `adb shell am force-stop <
 **factory reset**, which removes the device owner; after that you can install apps normally. Export a backup first if
 you already have rides.
 
+## Sync rides to your phone (Google Fit / Samsung Health)
+
+Each rider can send their own rides to their own phone:
+
+1. Install `rehit-rider-sync-*.apk` from [Releases](../../releases) on your Android phone (8+). It needs Health Connect, which is built into Android 14+ and available from the Play Store on older phones.
+2. On the tablet, choose your rider, then go to **Settings → Sync to my phone → Link a phone**. A 6-digit code appears.
+3. Open **REHIT Rider Sync** on the phone, which must be on the same Wi-Fi. Pick the tablet, enter the code and allow Health Connect access.
+4. In Google Fit or Samsung Health, enable Health Connect sync.
+
+The phone only ever receives the rides of the rider it was linked to. It syncs whenever you open the app, and every
+30 minutes on Wi-Fi while the tablet app is running. Missed rides catch up automatically and are never duplicated.
+
 ## Getting started properly
 
 1. **Health check.** Ask your doctor before doing all-out sprints if you have heart disease, high blood pressure, are
