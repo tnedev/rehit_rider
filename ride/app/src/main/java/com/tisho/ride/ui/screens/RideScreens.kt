@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.navigation.NavHostController
+import com.tisho.ride.bike.PowerModel
 import com.tisho.ride.data.Profile
 import com.tisho.ride.data.Ride
 import com.tisho.ride.data.Sample
@@ -105,8 +106,9 @@ fun SummaryScreen(vm: AppViewModel, nav: NavHostController) {
             if (r.newSprintInnate != null) Panel {
                 Label("Sprint coach", C.accent)
                 Spacer(Modifier.height(8.dp))
-                Text("Peak cadence per sprint: ${r.sprintPeaks.joinToString(", ")} rpm", style = MaterialTheme.typography.titleMedium)
-                val old = if (p.sprintInnate > 0) p.sprintInnate else r.newSprintInnate
+                Text("Peak cadence: ${r.sprintPeaks.joinToString(", ")} rpm · at the finish: ${r.sprintEndRpm.joinToString(", ")} rpm", style = MaterialTheme.typography.titleMedium)
+                Text("Sprint load this ride: level ${PowerModel.levelForInnate(r.sprintInnateUsed)} → next ride: level ${PowerModel.levelForInnate(r.newSprintInnate)}", color = C.muted)
+                val old = r.sprintInnateUsed
                 Text(
                     when {
                         r.newSprintInnate > old -> "Strong sprints! Next time the sprint load goes up to keep you in the most effective zone."

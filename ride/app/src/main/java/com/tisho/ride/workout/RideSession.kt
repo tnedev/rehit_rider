@@ -52,6 +52,8 @@ data class SessionResult(
     /** Updated adaptive sprint resistance after REHIT. */
     val newSprintInnate: Int? = null,
     val sprintPeaks: List<Int> = emptyList(),
+    val sprintEndRpm: List<Int> = emptyList(),
+    val sprintInnateUsed: Int = 0,
 )
 
 /** Runs one workout for one rider against the bike. */
@@ -86,6 +88,9 @@ class RideSession(
     private var maxHr = 0
     private var maxRpm = 0
     private val sprintPeaks = ArrayList<Int>()
+    private val sprintEndRpm = ArrayList<Int>()
+    private val sprintRpms = ArrayList<Int>()
+    private var lastHrWarning = 0
     private var sprintPeak = 0
     private var finishedResult: SessionResult? = null
     private val energy = EnergyModel(profile)
@@ -189,7 +194,11 @@ class RideSession(
         maxRpm = max(maxRpm, st.rpm)
         if (st.hr > 0) { hrSum += st.hr; hrCount++; maxHr = max(maxHr, st.hr) }
         hrZoneSeconds[Metrics.hrZone(st.hr, profile.maxHr)]++
-        if (step.type == TargetType.SPRINT) sprintPeak = max(sprintPeak, st.rpm)
+        if (step.type == TargetType.SPRINT) { sprintPeak = max(sprintPeak, st.rpm); sprintRpms += st.rpm }
+        if (st.hr > 0 && st.hr >= profile.maxHr * 0.95 && st.elapsed - lastHrWarning > 60) {
+            lastHrWarning = st.elapsed
+            cues.say("Heart rate very high. Ease off if you feel unwell.")
+        }
 
         val kj = st.kj + w / 1000.0
         val burned = energy.kcalPerSecond(st.watts, st.hr)
@@ -221,7 +230,7 @@ class RideSession(
     }
 
     private fun enterStep(i: Int) {
-        if (currentStep.type == TargetType.SPRINT) { sprintPeaks += sprintPeak; sprintPeak = 0 }
+        if (currentStep.type == TargetType.SPRINT) closeSprint()
         levelOffset = 0
         val next = steps[i]
         if (next.type != TargetType.FTP_PCT && next.type != TargetType.WATTS) wattOffset = 0
@@ -232,12 +241,19 @@ class RideSession(
 
     fun finish(): SessionResult {
         finishedResult?.let { return it }
-        if (currentStep.type == TargetType.SPRINT && sprintPeak > 0) { sprintPeaks += sprintPeak; sprintPeak = 0 }
+        if (currentStep.type == TargetType.SPRINT && sprintPeak > 0) closeSprint()
         _state.value = _state.value.copy(phase = Phase.FINISHED)
         job?.cancel()
         bike.setResistance(0)
         cues.say("Workout complete. Great job!")
         return buildResult().also { finishedResult = it }
+    }
+
+    private fun closeSprint() {
+        sprintPeaks += sprintPeak
+        sprintEndRpm += sprintRpms.takeLast(3).takeIf { it.isNotEmpty() }?.average()?.roundToInt() ?: 0
+        sprintPeak = 0
+        sprintRpms.clear()
     }
 
     private fun buildResult(): SessionResult {
@@ -273,22 +289,24 @@ class RideSession(
         )
         var newFtp: Int? = null
         var vo2: Double? = null
+        if (workout.id == "ftp20" && ride.peak20m > 0) {
+            newFtp = (ride.peak20m * if (ride.peak20m * 0.95 / profile.weightKg < 3.0) 0.92 else 0.95).roundToInt()
+        }
         if (workout.id == "ramp" && ride.peak1m > 0) {
             newFtp = (ride.peak1m * 0.75).roundToInt()
             vo2 = Metrics.vo2max(ride.peak1m, profile.weightKg)
         }
         var newSprint: Int? = null
-        if (sprintPeaks.isNotEmpty()) {
-            // Keep sprints in the effective 90-110 rpm peak window: too easy -> heavier next time.
-            val avgPeak = sprintPeaks.average()
+        if (sprintEndRpm.isNotEmpty() && sprintPeaks.any { it > 30 }) {
+            // Research rule: if cadence is still >110 rpm at the end of the sprint the load is too light (+5%);
+            // if it has collapsed below 60 rpm it is too heavy (-5%). Otherwise keep it.
+            val end = sprintEndRpm.average()
             newSprint = when {
-                avgPeak > 115 -> sprintInnate + 10
-                avgPeak > 105 -> sprintInnate + 5
-                avgPeak < 75 -> sprintInnate - 10
-                avgPeak < 88 -> sprintInnate - 5
+                end > 110 -> (sprintInnate * 1.05).roundToInt() + 1
+                end < 60 -> (sprintInnate * 0.95).roundToInt() - 1
                 else -> sprintInnate
             }.coerceIn(40, PowerModel.MAX_INNATE)
         }
-        return SessionResult(ride, samples.toList(), newFtp, vo2, newSprint, sprintPeaks.toList())
+        return SessionResult(ride, samples.toList(), newFtp, vo2, newSprint, sprintPeaks.toList(), sprintEndRpm.toList(), sprintInnate)
     }
 }

@@ -60,9 +60,15 @@ import com.tisho.ride.workout.TargetType
 
 @Composable
 fun RideScreen(vm: AppViewModel, nav: NavHostController) {
-    val session = vm.session ?: run { nav.popBackStack(); return }
+    // Hold on to the session for the life of this screen: finishing clears vm.session, and the screen
+    // must not react to that by popping the back stack (that used to close the summary before Save).
+    val session = remember { vm.session } ?: run {
+        androidx.compose.runtime.LaunchedEffect(Unit) { nav.popBackStack("home", false) }
+        return
+    }
     val st by session.state.collectAsState()
     var confirmStop by remember { mutableStateOf(false) }
+    var finished by remember { mutableStateOf(false) }
     val step = session.steps[st.stepIndex.coerceIn(0, session.steps.lastIndex)]
     val next = session.steps.getOrNull(st.stepIndex + 1)
     val isSprint = step.type == TargetType.SPRINT && st.phase == Phase.RUNNING
@@ -74,11 +80,13 @@ fun RideScreen(vm: AppViewModel, nav: NavHostController) {
     BackHandler { confirmStop = true }
 
     fun finish() {
+        if (finished) return
+        finished = true
         vm.finishRide()
         nav.navigate("summary") { popUpTo("home") }
     }
     androidx.compose.runtime.LaunchedEffect(st.phase) {
-        if (st.phase == Phase.FINISHED && vm.session != null) finish()
+        if (st.phase == Phase.FINISHED && !finished) finish()
     }
 
     Box(Modifier.fillMaxSize().background(bg)) {

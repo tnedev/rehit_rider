@@ -88,7 +88,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun startRide(w: Workout): RideSession? {
         val p = profile.value ?: return null
         session?.finish()
-        return RideSession(viewModelScope, bike, hrm, power, p, w, cues).also { session = it; it.start() }
+        val workout = if (w.id == "ramp") WorkoutLibrary.ramp(if (p.weightKg < 60 || p.age >= 60) 10 else 20) else w
+        return RideSession(viewModelScope, bike, hrm, power, p, workout, cues).also { session = it; it.start() }
     }
 
     fun finishRide(): SessionResult? {

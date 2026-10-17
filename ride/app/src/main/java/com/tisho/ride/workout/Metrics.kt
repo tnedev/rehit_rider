@@ -135,9 +135,13 @@ object Metrics {
         return (r.durationSec / 60) * if (vigorous) 2 else 1
     }
 
-    /** Initial sprint resistance: ~7 W/kg at 110 rpm on this bike's power curve. */
+    /**
+     * Initial sprint resistance: the research load of 7.5% of body mass (5% for riders 60+), i.e. the
+     * Wingate-equivalent power at 110 rpm (0.075 * m * g * 6 m/rev * rpm / 60).
+     */
     fun defaultSprintInnate(p: Profile, wattsAt: (rpm: Int, innate: Int) -> Double): Int {
-        val target = p.weightKg * if (p.sex == "F") 6.0 else 7.0
+        val fraction = if (p.age >= 60) 0.05 else 0.075
+        val target = fraction * p.weightKg * 9.81 * 6 * 110 / 60
         for (innate in 40..220) if (wattsAt(110, innate) >= target) return innate
         return 220
     }

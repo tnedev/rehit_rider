@@ -120,13 +120,16 @@ private fun recommend(rides: List<Ride>, load: Metrics.Load?): Pair<Workout, Str
     val last = rides.firstOrNull()
     val daysSince = if (last == null) 99 else ((System.currentTimeMillis() - last.startedAt) / 86_400_000L).toInt()
     val form = load?.form ?: 0.0
+    val rehits = rides.count { it.workoutId.startsWith("rehit") }
+    // Research on-ramp: ~a week of 2x10 s, a week of 2x15 s, then 2x20 s.
+    val nextRehit = when { rehits < 2 -> WorkoutLibrary.rehit10; rehits < 4 -> WorkoutLibrary.rehit15; else -> WorkoutLibrary.rehit }
     val lastHard = last != null && (last.intensityFactor >= 0.9 || last.workoutId.startsWith("rehit") || last.workoutId == "tabata")
     return when {
-        rides.isEmpty() -> WorkoutLibrary.rehit to "Start here: under 9 minutes, scientifically proven to raise fitness fast."
+        rides.isEmpty() -> nextRehit to "Start here: under 10 minutes, scientifically proven to raise fitness. Begins gently with 10-second sprints."
         rides.none { it.workoutId == "ramp" } && rides.size >= 3 -> WorkoutLibrary.ramp to "You have a few rides in. Take the ramp test to personalise every ERG workout."
         form < -25 -> WorkoutLibrary.recovery to "Your fatigue is high (form ${form.toInt()}). Easy spin today helps you absorb the training."
         lastHard && daysSince < 1 -> WorkoutLibrary.zone2 to "You went hard recently. Aerobic base work today, intensity again tomorrow."
-        daysSince >= 2 -> WorkoutLibrary.rehit to "It's been $daysSince days. A quick REHIT keeps the momentum."
+        daysSince >= 2 -> nextRehit to "It's been $daysSince days. A quick REHIT keeps the momentum — two a week is all it takes."
         form > 5 -> WorkoutLibrary.norwegian to "You're fresh (form +${form.toInt()}). A great day for a quality VO₂max session."
         else -> WorkoutLibrary.sweetSpot to "Steady, productive work that builds threshold without much fatigue."
     }
