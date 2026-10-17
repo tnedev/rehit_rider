@@ -149,11 +149,20 @@ fun RideScreen(vm: AppViewModel, nav: NavHostController) {
             // Timeline + live chart
             Box(Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(20.dp)).background(C.surface).padding(16.dp)) {
                 if (!open) WorkoutProfile(session.steps, p.ftp, Modifier.fillMaxSize(), progressSec = st.elapsed)
-                else LineChart(
-                    listOf(Series(st.wattsHistory, C.power, fill = true), Series(st.hrHistory.map { it.toFloat() }, C.heart, max = p.maxHr.toFloat()),
-                        Series(st.rpmHistory.map { it.toFloat() }, C.cadence, max = 140f)),
-                    Modifier.fillMaxSize(),
-                )
+                else Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    // Legend with live values so each line is identifiable; history covers the last 10 minutes.
+                    Column(Modifier.width(210.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Label("Last 10 minutes")
+                        Text("● Power ${st.watts.toInt()} W", color = C.power, style = MaterialTheme.typography.titleMedium)
+                        Text("● Heart rate ${if (st.hr > 0) "${st.hr} bpm" else "—"}", color = C.heart, style = MaterialTheme.typography.titleMedium)
+                        Text("● Cadence ${st.rpm} rpm", color = C.cadence, style = MaterialTheme.typography.titleMedium)
+                    }
+                    LineChart(
+                        listOf(Series(st.wattsHistory, C.power, fill = true), Series(st.hrHistory.map { it.toFloat() }, C.heart, max = p.maxHr.toFloat()),
+                            Series(st.rpmHistory.map { it.toFloat() }, C.cadence, max = 140f)),
+                        Modifier.weight(1f).fillMaxHeight(),
+                    )
+                }
             }
         }
 
@@ -161,7 +170,7 @@ fun RideScreen(vm: AppViewModel, nav: NavHostController) {
         if (st.phase == Phase.PAUSED) Overlay {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Paused", style = MaterialTheme.typography.displayMedium, color = Color.White)
-                Text(if (st.autoPaused) "Start pedalling to continue" else "Tap ▶ to continue", style = MaterialTheme.typography.titleLarge, color = C.muted)
+                Text(if (st.autoPaused) "Start pedalling to continue" else "Tap ▶ to continue", style = MaterialTheme.typography.titleLarge, color = Color(0xFFE6E9EE))
                 Spacer(Modifier.height(24.dp))
                 if (!st.autoPaused) FilledIconButton(onClick = { session.togglePause() }, modifier = Modifier.size(96.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = C.accent)) {
                     Icon(Icons.Filled.PlayArrow, null, modifier = Modifier.size(56.dp))
