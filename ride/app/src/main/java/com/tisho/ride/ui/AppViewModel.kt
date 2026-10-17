@@ -9,6 +9,7 @@ import com.tisho.ride.RideApp
 import com.tisho.ride.data.Profile
 import com.tisho.ride.data.Ride
 import com.tisho.ride.data.Settings
+import com.tisho.ride.workout.Metrics
 import com.tisho.ride.workout.RideSession
 import com.tisho.ride.workout.SessionResult
 import com.tisho.ride.workout.Workout
@@ -47,6 +48,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val workouts: StateFlow<List<Workout>> = repo.customWorkouts.map { WorkoutLibrary.all + it }
         .stateIn(viewModelScope, SharingStarted.Eagerly, WorkoutLibrary.all)
+
+    /** Every rider's score for the leaderboard. */
+    val leaderboard: StateFlow<List<Metrics.RiderScore>> = combine(profiles, repo.db.rides().all()) { ps, all ->
+        val byRider = all.groupBy { it.profileId }
+        ps.map { Metrics.riderScore(it, byRider[it.id].orEmpty()) }.sortedByDescending { it.total }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     var session: RideSession? = null
         private set

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -60,6 +61,7 @@ import com.tisho.ride.ui.RideTheme
 import com.tisho.ride.ui.screens.BuilderScreen
 import com.tisho.ride.ui.screens.HistoryScreen
 import com.tisho.ride.ui.screens.HomeScreen
+import com.tisho.ride.ui.screens.LeaderboardScreen
 import com.tisho.ride.ui.screens.ProfileEditScreen
 import com.tisho.ride.ui.screens.ProfilesScreen
 import com.tisho.ride.ui.screens.ProgressScreen
@@ -105,6 +107,7 @@ private val tabs = listOf(
     Tab("home", "Ride", Icons.Filled.Home),
     Tab("history", "History", Icons.Filled.History),
     Tab("progress", "Progress", Icons.Filled.Insights),
+    Tab("riders", "Riders", Icons.Filled.EmojiEvents),
     Tab("me", "Profile", Icons.Filled.Person),
     Tab("settings", "Settings", Icons.Filled.Settings),
 )
@@ -205,6 +208,7 @@ private fun Graph(vm: AppViewModel, nav: NavHostController) {
         composable("history") { HistoryScreen(vm, nav) }
         composable("rides/{id}") { RideDetailScreen(vm, nav, it.arguments?.getString("id")?.toLongOrNull() ?: 0L) }
         composable("progress") { ProgressScreen(vm, nav) }
+        composable("riders") { LeaderboardScreen(vm) }
         composable("me") { ProfileEditScreen(vm, nav, vm.profile.value?.id ?: 0L, embedded = true) }
         composable("settings") { SettingsScreen(vm, nav) }
     }

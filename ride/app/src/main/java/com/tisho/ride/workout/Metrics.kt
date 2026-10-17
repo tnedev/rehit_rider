@@ -135,6 +135,42 @@ object Metrics {
         return (r.durationSec / 60) * if (vigorous) 2 else 1
     }
 
+    data class RiderScore(
+        val profile: Profile,
+        val total: Int,
+        val fitness: Int, val consistency: Int, val sprint: Int, val improvement: Int,
+        val vo2: Double, val vo2Estimated: Boolean,
+        val sprintWkg: Double, val weekMinutes: Int, val streak: Int, val improvementPct: Double?,
+    )
+
+    /**
+     * Leaderboard score out of 1000, fair across ages and body sizes:
+     * fitness 400 (VO₂max vs age/sex norm), consistency 300 (weekly goal + streak),
+     * sprint 150 (best 5-s W/kg, 30 days), improvement 150 (best 20-s power, 4 weeks vs previous 4).
+     */
+    fun riderScore(p: Profile, rides: List<Ride>, now: Long = System.currentTimeMillis()): RiderScore {
+        val day = 86_400_000L
+        val ramp = rides.filter { it.workoutId == "ramp" && it.startedAt > now - 90 * day }.maxOfOrNull { it.peak1m }
+        val vo2 = vo2max(ramp ?: (p.ftp / 0.75), p.weightKg)
+        val norm = (if (p.sex == "F") 30.0 else 36.0) - (p.age - 30).coerceAtLeast(0) * 0.3
+        val fitness = (((vo2 - norm + 10) / 30).coerceIn(0.0, 1.0) * 400).toInt()
+
+        val week = rides.filter { it.startedAt >= startOfWeek(now) }.sumOf { activeMinutes(it) }
+        val streak = weekStreak(rides, now)
+        val consistency = ((week.toDouble() / p.weeklyGoalMinutes.coerceAtLeast(1)).coerceAtMost(1.0) * 200 + streak.coerceAtMost(8) / 8.0 * 100).toInt()
+
+        val sprintWkg = (rides.filter { it.startedAt > now - 30 * day }.maxOfOrNull { it.peak5s } ?: 0.0) / p.weightKg
+        val sprint = (((sprintWkg - 4) / 10).coerceIn(0.0, 1.0) * 150).toInt()
+
+        val recent = rides.filter { it.startedAt > now - 28 * day }.maxOfOrNull { it.peak20s }
+        val before = rides.filter { it.startedAt in (now - 56 * day)..(now - 28 * day) }.maxOfOrNull { it.peak20s }
+        val pct = if (recent != null && before != null && before > 0) (recent - before) / before * 100 else null
+        val improvement = if (pct == null) 50 else (((pct + 10) / 30).coerceIn(0.0, 1.0) * 150).toInt()
+
+        return RiderScore(p, fitness + consistency + sprint + improvement, fitness, consistency, sprint, improvement,
+            vo2, ramp == null, sprintWkg, week, streak, pct)
+    }
+
     /**
      * Initial sprint resistance: the research load of 7.5% of body mass (5% for riders 60+), i.e. the
      * Wingate-equivalent power at 110 rpm (0.075 * m * g * 6 m/rev * rpm / 60).

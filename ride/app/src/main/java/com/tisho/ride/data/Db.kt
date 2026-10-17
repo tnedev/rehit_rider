@@ -122,6 +122,7 @@ interface ProfileDao {
 interface RideDao {
     @Query("SELECT * FROM Ride WHERE profileId = :profileId ORDER BY startedAt DESC") fun forProfile(profileId: Long): Flow<List<Ride>>
     @Query("SELECT * FROM Ride WHERE profileId = :profileId ORDER BY startedAt DESC") suspend fun forProfileNow(profileId: Long): List<Ride>
+    @Query("SELECT * FROM Ride ORDER BY startedAt DESC") fun all(): Flow<List<Ride>>
     @Query("SELECT * FROM Ride WHERE id = :id") fun byId(id: Long): Flow<Ride?>
     @Query("SELECT * FROM Ride WHERE id = :id") suspend fun get(id: Long): Ride?
     @Query("SELECT * FROM Sample WHERE rideId = :rideId ORDER BY t") suspend fun samples(rideId: Long): List<Sample>
