@@ -1,0 +1,9 @@
+.venv/
+tools/
+apk/
+tablet_logs/
+*.apk
+build/
+.gradle/
+local.properties
+scratch_ride.log
