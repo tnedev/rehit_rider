@@ -21,6 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -73,6 +77,10 @@ fun HomeScreen(vm: AppViewModel, nav: NavHostController) {
     val load = Metrics.trainingLoad(rides).lastOrNull()?.second
     val (rec, why) = recommend(rides, load)
 
+    var info by remember { mutableStateOf<Workout?>(null) }
+    val top3 = topWorkouts(rides, workouts)
+    val open = { w: Workout -> nav.navigate("workout/${w.id}") }
+
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 32.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.height(260.dp)) {
@@ -96,6 +104,12 @@ fun HomeScreen(vm: AppViewModel, nav: NavHostController) {
                 RecommendCard(rec, why, p, Modifier.weight(1.3f).fillMaxSize(), vm) { nav.navigate("workout/${rec.id}") }
             }
         }
+        item {
+            SectionTitle(if (rides.isEmpty()) "Good places to start" else "Your top 3")
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                for (w in top3) WorkoutCard(w, p, Modifier.weight(1f), onInfo = { info = w }) { open(w) }
+            }
+        }
         val groups = workouts.groupBy { it.category }
         for (cat in Category.entries) {
             val list = groups[cat].orEmpty()
@@ -107,11 +121,53 @@ fun HomeScreen(vm: AppViewModel, nav: NavHostController) {
                 if (list.isEmpty()) {
                     Text("Design your own intervals with the workout builder.", color = C.muted)
                 } else LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(list, key = { it.id }) { w -> WorkoutCard(w, p) { nav.navigate("workout/${w.id}") } }
+                    items(list, key = { it.id }) { w -> WorkoutCard(w, p, Modifier.width(300.dp), onInfo = { info = w }) { open(w) } }
                 }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+    info?.let { w -> WorkoutInfoDialog(w, p, onDismiss = { info = null }) { info = null; open(w) } }
+}
+
+/** The rider's three most-ridden workouts; new riders get evidence-based starters. */
+private fun topWorkouts(rides: List<Ride>, all: List<Workout>): List<Workout> {
+    val used = rides.groupingBy { it.workoutId }.eachCount().entries.sortedByDescending { it.value }
+        .mapNotNull { e -> all.firstOrNull { it.id == e.key } }
+    val starters = listOf("rehit10", "zone2-30", "10x1").mapNotNull { id -> all.firstOrNull { it.id == id } }
+    return (used + starters).distinctBy { it.id }.take(3)
+}
+
+@Composable
+fun WorkoutInfoDialog(w: Workout, p: Profile, onDismiss: () -> Unit, onOpen: () -> Unit) {
+    val g = com.tisho.ride.workout.WorkoutGuides.of(w)
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(w.name, style = MaterialTheme.typography.headlineSmall) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("${if (w.category == Category.FREE) "Open-ended" else "${w.minutes} min"} · intensity ${w.intensity}/5", color = C.accent, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Text(w.summary, style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(12.dp))
+                WorkoutProfile(w.steps, p.ftp, Modifier.fillMaxWidth().height(64.dp))
+                Spacer(Modifier.height(12.dp))
+                InfoLine("Good for", g.forWho)
+                InfoLine("How it feels", g.feels)
+                InfoLine("How often", g.howOften)
+                InfoLine("The science", w.science)
+            }
+        },
+        confirmButton = { Button(onClick = onOpen, colors = ButtonDefaults.buttonColors(containerColor = C.accent)) { Text("Choose") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+@Composable
+private fun InfoLine(label: String, text: String) {
+    Column(Modifier.padding(vertical = 5.dp)) {
+        Label(label)
+        Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -171,11 +227,14 @@ private fun RecommendCard(w: Workout, why: String, p: Profile, modifier: Modifie
 }
 
 @Composable
-private fun WorkoutCard(w: Workout, p: Profile, onClick: () -> Unit) {
-    Panel(Modifier.width(300.dp).height(200.dp), onClick = onClick) {
+private fun WorkoutCard(w: Workout, p: Profile, modifier: Modifier, onInfo: () -> Unit, onClick: () -> Unit) {
+    Panel(modifier.height(200.dp), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(w.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(if (w.category == Category.FREE) "∞" else "${w.minutes}′", style = MaterialTheme.typography.titleLarge, color = C.accent)
+            androidx.compose.material3.IconButton(onClick = onInfo, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Outlined.Info, "About ${w.name}", tint = C.muted)
+            }
         }
         Spacer(Modifier.height(6.dp))
         Text(w.summary, style = MaterialTheme.typography.bodyMedium, color = C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -200,6 +259,13 @@ fun WorkoutDetailScreen(vm: AppViewModel, nav: NavHostController, id: String) {
                 Chip(w.category.title, C.level)
             }
             Text(w.summary, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(20.dp))
+            val g = com.tisho.ride.workout.WorkoutGuides.of(w)
+            Panel {
+                InfoLine("Good for", g.forWho)
+                InfoLine("How it feels", g.feels)
+                InfoLine("How often", g.howOften)
+            }
             Spacer(Modifier.height(20.dp))
             Panel {
                 Label("Workout shape")

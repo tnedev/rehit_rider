@@ -142,6 +142,10 @@ fun ProfileEditScreen(vm: AppViewModel, nav: NavHostController, id: Long, embedd
                 colors = ButtonDefaults.buttonColors(containerColor = C.accent),
             ) { Icon(Icons.Filled.Check, null); Spacer(Modifier.width(8.dp)); Text("Save") }
         }
+        if (existing != null) {
+            Spacer(Modifier.height(24.dp))
+            FitnessCard(vm, existing)
+        }
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Panel(Modifier.weight(1f)) {
@@ -213,4 +217,32 @@ private fun Num(label: String, value: String, modifier: Modifier, decimal: Boole
         keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number),
         shape = RoundedCornerShape(12.dp),
     )
+}
+
+/** This rider's current VO₂max, what it means, where it comes from, and how it has changed. */
+@Composable
+private fun FitnessCard(vm: AppViewModel, p: Profile) {
+    val rides by vm.repo.rides(p.id).collectAsState(initial = emptyList())
+    val fit = com.tisho.ride.workout.Metrics.fitness(p, rides)
+    val female = p.sex == "F"
+    val fitnessAge = com.tisho.ride.workout.Metrics.fitnessAge(fit.vo2, female)
+    Panel {
+        Label("Fitness")
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            com.tisho.ride.ui.Stat("VO₂max", "%.0f".format(fit.vo2), "ml/kg/min", C.cadence, big = true)
+            com.tisho.ride.ui.Stat("Rating", com.tisho.ride.workout.Metrics.vo2Rating(fit.vo2, p.age, female), "for age ${p.age}")
+            com.tisho.ride.ui.Stat("Fitness age", "$fitnessAge", if (fitnessAge < p.age) "${p.age - fitnessAge} years younger" else if (fitnessAge > p.age) "${fitnessAge - p.age} years older" else "same as your age", C.accent)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("Based on ${fit.source}.", color = C.muted)
+        if (fit.history.size >= 2) {
+            Spacer(Modifier.height(12.dp))
+            com.tisho.ride.ui.LineChart(listOf(com.tisho.ride.ui.Series(fit.history.map { it.second.toFloat() }, C.cadence, fill = true,
+                max = (fit.history.maxOf { it.second } * 1.15).toFloat())), Modifier.fillMaxWidth().height(110.dp))
+            Text("VO₂max per ride since ${com.tisho.ride.ui.fmtDay(fit.history.first().first)}", color = C.muted, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Text("Ride with a heart-rate strap or the hand grips and each steady ride adds an estimate here. The ramp test gives the most accurate value.", color = C.muted, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }

@@ -81,6 +81,10 @@ data class Ride(
     /** Seconds spent in HR zones 1..5, comma separated. */
     val hrZoneSeconds: String = "",
     val ftpAtRide: Int,
+    /** VO₂max estimate from this ride (ramp test peak power or HR–power extrapolation), 0 if none. */
+    val vo2Estimate: Double = 0.0,
+    /** 2 = ramp test, 1 = heart-rate estimate, 0 = none. */
+    val vo2Source: Int = 0,
     val rpe: Int = 0,
     val notes: String = "",
 )
@@ -154,7 +158,7 @@ interface CustomWorkoutDao {
     @Query("DELETE FROM CustomWorkout WHERE id = :id") suspend fun delete(id: Long)
 }
 
-@Database(entities = [Profile::class, Ride::class, Sample::class, CustomWorkout::class], version = 2, exportSchema = false)
+@Database(entities = [Profile::class, Ride::class, Sample::class, CustomWorkout::class], version = 3, exportSchema = false)
 abstract class RideDb : RoomDatabase() {
     abstract fun profiles(): ProfileDao
     abstract fun rides(): RideDao
@@ -167,6 +171,13 @@ abstract class RideDb : RoomDatabase() {
             }
         }
 
-        fun create(context: Context) = Room.databaseBuilder(context, RideDb::class.java, "ride.db").addMigrations(MIGRATION_1_2).build()
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE Ride ADD COLUMN vo2Estimate REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE Ride ADD COLUMN vo2Source INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        fun create(context: Context) = Room.databaseBuilder(context, RideDb::class.java, "ride.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
     }
 }

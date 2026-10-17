@@ -66,16 +66,19 @@ object Metrics {
     fun vo2max(peakAerobicWatts: Double, weightKg: Double): Double =
         if (weightKg <= 0) 0.0 else 10.8 * peakAerobicWatts / weightKg + 7
 
-    /** Fitness percentile label from VO₂max, roughly following ACSM/Cooper norms. */
+    /** Average VO₂max for age and sex (ACSM/Cooper 50th percentiles, linearised). */
+    fun averageVo2(age: Int, female: Boolean): Double =
+        if (female) 43.25 - 0.25 * age else 51.5 - 0.3 * age
+
+    /** Rating relative to the average for the rider's age and sex. */
     fun vo2Rating(vo2: Double, age: Int, female: Boolean): String {
-        val base = if (female) 30.0 else 36.0
-        val adj = base - (age - 30).coerceAtLeast(0) * 0.3
+        val diff = vo2 - averageVo2(age, female)
         return when {
             vo2 <= 0 -> "—"
-            vo2 >= adj + 14 -> "Superior"
-            vo2 >= adj + 8 -> "Excellent"
-            vo2 >= adj + 3 -> "Good"
-            vo2 >= adj - 3 -> "Fair"
+            diff >= 10 -> "Superior"
+            diff >= 5 -> "Excellent"
+            diff >= 0 -> "Good"
+            diff >= -5 -> "Fair"
             else -> "Poor"
         }
     }
@@ -135,6 +138,51 @@ object Metrics {
         return (r.durationSec / 60) * if (vigorous) 2 else 1
     }
 
+    /**
+     * Submaximal VO₂max estimate: fit heart rate against power over steady 30-s blocks, extrapolate
+     * to max HR to get maximal aerobic power, then apply the ACSM cycling equation. Needs at least
+     * 5 minutes of usable data across a 30 W+ power range, and a reasonable fit (r² ≥ 0.5).
+     */
+    fun vo2FromHeartRate(samples: List<com.tisho.ride.data.Sample>, p: Profile): Double? {
+        val usable = samples.filter { it.t >= 180 && it.rpm >= 40 && it.watts >= 30 && it.hr >= p.maxHr * 0.5 && it.hr <= p.maxHr * 0.92 }
+        val blocks = usable.groupBy { it.t / 30 }.values.filter { it.size >= 20 }
+            .map { b -> b.map { it.watts.toDouble() }.average() to b.map { it.hr.toDouble() }.average() }
+        if (blocks.size < 10) return null
+        val xs = blocks.map { it.first }
+        val ys = blocks.map { it.second }
+        if (xs.max() - xs.min() < 30) return null
+        val mx = xs.average(); val my = ys.average()
+        val sxy = xs.indices.sumOf { (xs[it] - mx) * (ys[it] - my) }
+        val sxx = xs.sumOf { (it - mx) * (it - mx) }
+        val syy = ys.sumOf { (it - my) * (it - my) }
+        if (sxx <= 0 || syy <= 0) return null
+        val slope = sxy / sxx
+        val r2 = sxy * sxy / (sxx * syy)
+        if (slope <= 0 || r2 < 0.5) return null
+        val map = mx + (p.maxHr - my) / slope
+        if (map < 60 || map > 700) return null
+        return vo2max(map, p.weightKg)
+    }
+
+    data class Fitness(val vo2: Double, val source: String, val history: List<Pair<Long, Double>>)
+
+    /** Current VO₂max for a rider: recent ramp test, else median of recent ride estimates, else from FTP. */
+    fun fitness(p: Profile, rides: List<Ride>, now: Long = System.currentTimeMillis()): Fitness {
+        val day = 86_400_000L
+        val history = rides.filter { it.vo2Estimate > 0 }.sortedBy { it.startedAt }.map { it.startedAt to it.vo2Estimate }
+        val ramp = rides.filter { it.vo2Source == 2 && it.startedAt > now - 90 * day }.maxByOrNull { it.startedAt }
+        if (ramp != null) return Fitness(ramp.vo2Estimate, "ramp test on ${java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault()).format(java.util.Date(ramp.startedAt))}", history)
+        val recent = rides.filter { it.vo2Source == 1 && it.startedAt > now - 60 * day }.sortedByDescending { it.startedAt }.take(5).map { it.vo2Estimate }.sorted()
+        if (recent.isNotEmpty()) return Fitness(recent[recent.size / 2], "heart rate in your last ${recent.size} ride${if (recent.size == 1) "" else "s"}", history)
+        return Fitness(vo2max(p.ftp / 0.75, p.weightKg), if (p.ftpIsEstimated) "a rough estimate from your weight" else "your FTP", history)
+    }
+
+    /** Fitness age: the age at which an average person of your sex has your VO₂max (idea from Nes et al. 2013, HUNT). */
+    fun fitnessAge(vo2: Double, female: Boolean): Int {
+        val (a, b) = if (female) 43.25 to 0.25 else 51.5 to 0.3
+        return ((a - vo2) / b).toInt().coerceIn(18, 90)
+    }
+
     data class RiderScore(
         val profile: Profile,
         val total: Int,
@@ -150,10 +198,9 @@ object Metrics {
      */
     fun riderScore(p: Profile, rides: List<Ride>, now: Long = System.currentTimeMillis()): RiderScore {
         val day = 86_400_000L
-        val ramp = rides.filter { it.workoutId == "ramp" && it.startedAt > now - 90 * day }.maxOfOrNull { it.peak1m }
-        val vo2 = vo2max(ramp ?: (p.ftp / 0.75), p.weightKg)
-        val norm = (if (p.sex == "F") 30.0 else 36.0) - (p.age - 30).coerceAtLeast(0) * 0.3
-        val fitness = (((vo2 - norm + 10) / 30).coerceIn(0.0, 1.0) * 400).toInt()
+        val fit = fitness(p, rides, now)
+        val vo2 = fit.vo2
+        val fitness = (((vo2 - averageVo2(p.age, p.sex == "F") + 10) / 30).coerceIn(0.0, 1.0) * 400).toInt()
 
         val week = rides.filter { it.startedAt >= startOfWeek(now) }.sumOf { activeMinutes(it) }
         val streak = weekStreak(rides, now)
@@ -168,7 +215,7 @@ object Metrics {
         val improvement = if (pct == null) 50 else (((pct + 10) / 30).coerceIn(0.0, 1.0) * 150).toInt()
 
         return RiderScore(p, fitness + consistency + sprint + improvement, fitness, consistency, sprint, improvement,
-            vo2, ramp == null, sprintWkg, week, streak, pct)
+            vo2, !fit.source.startsWith("ramp") && !fit.source.startsWith("heart"), sprintWkg, week, streak, pct)
     }
 
     /**

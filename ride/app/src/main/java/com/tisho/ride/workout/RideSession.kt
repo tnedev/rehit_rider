@@ -296,6 +296,8 @@ class RideSession(
             newFtp = (ride.peak1m * 0.75).roundToInt()
             vo2 = Metrics.vo2max(ride.peak1m, profile.weightKg)
         }
+        val rideVo2 = vo2 ?: Metrics.vo2FromHeartRate(samples, profile)
+        val vo2Source = if (vo2 != null) 2 else if (rideVo2 != null) 1 else 0
         var newSprint: Int? = null
         if (sprintEndRpm.isNotEmpty() && sprintPeaks.any { it > 30 }) {
             // Research rule: if cadence is still >110 rpm at the end of the sprint the load is too light (+5%);
@@ -307,6 +309,6 @@ class RideSession(
                 else -> sprintInnate
             }.coerceIn(40, PowerModel.MAX_INNATE)
         }
-        return SessionResult(ride, samples.toList(), newFtp, vo2, newSprint, sprintPeaks.toList(), sprintEndRpm.toList(), sprintInnate)
+        return SessionResult(ride.copy(vo2Estimate = rideVo2 ?: 0.0, vo2Source = vo2Source), samples.toList(), newFtp, vo2, newSprint, sprintPeaks.toList(), sprintEndRpm.toList(), sprintInnate)
     }
 }

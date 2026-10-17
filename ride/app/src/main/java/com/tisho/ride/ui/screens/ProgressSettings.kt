@@ -63,8 +63,8 @@ fun ProgressScreen(vm: AppViewModel, nav: NavHostController) {
     val p = profile ?: return
     val load = Metrics.trainingLoad(rides).takeLast(90)
     val now = load.lastOrNull()?.second
-    val bestRamp = rides.filter { it.workoutId == "ramp" }.maxOfOrNull { it.peak1m }
-    val vo2 = Metrics.vo2max(bestRamp ?: (p.ftp / 0.75), p.weightKg)
+    val fit = Metrics.fitness(p, rides)
+    val vo2 = fit.vo2
     val month = System.currentTimeMillis() - 30L * 86_400_000
     val durations = listOf("5 s" to Ride5s, "20 s" to Ride20s, "1 min" to Ride1m, "5 min" to Ride5m, "20 min" to Ride20m)
 
@@ -76,7 +76,7 @@ fun ProgressScreen(vm: AppViewModel, nav: NavHostController) {
             }
             Panel(Modifier.weight(1f)) {
                 Stat("VO₂max", "%.0f".format(vo2), "ml/kg/min", C.cadence, big = true)
-                Text("${Metrics.vo2Rating(vo2, p.age, p.sex == "F")} for age ${p.age}${if (bestRamp == null) " · from FTP" else ""}", color = C.muted)
+                Text("${Metrics.vo2Rating(vo2, p.age, p.sex == "F")} for age ${p.age} · fitness age ${Metrics.fitnessAge(vo2, p.sex == "F")}", color = C.muted)
             }
             Panel(Modifier.weight(1f)) {
                 Stat("Fitness", "${now?.fitness?.toInt() ?: 0}", "CTL", C.level, big = true)
