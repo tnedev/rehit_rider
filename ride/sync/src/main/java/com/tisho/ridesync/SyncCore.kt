@@ -199,13 +199,14 @@ object Syncer {
     }
 
     /**
-     * Every 15 minutes (Android's minimum for background work) whenever there is a network, plus an
-     * extra pass as soon as the phone joins Wi-Fi.
+     * Every 15 minutes (Android's minimum for background work) while on Wi-Fi, plus an extra pass as
+     * soon as the phone joins Wi-Fi.
      */
     fun schedule(context: Context) {
         val wm = WorkManager.getInstance(context)
+        // Wi-Fi only: away from home the tablet can't be reached, so don't spend battery trying.
         val periodic = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).setRequiresBatteryNotLow(true).build())
             .build()
         wm.enqueueUniquePeriodicWork("rehit-sync", ExistingPeriodicWorkPolicy.UPDATE, periodic)
         val onWifi = androidx.work.OneTimeWorkRequestBuilder<SyncWorker>()
