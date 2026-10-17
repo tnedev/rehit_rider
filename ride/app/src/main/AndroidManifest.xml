@@ -20,7 +20,7 @@
 
     <application
         android:name=".RideApp"
-        android:label="Ride"
+        android:label="REHIT Rider"
         android:icon="@drawable/ic_launcher"
         android:theme="@style/Theme.Ride">
         <activity

@@ -289,7 +289,7 @@ fun SettingsScreen(vm: AppViewModel, nav: NavHostController) {
             }
             SectionTitle("About")
             Panel {
-                Text("Ride 1.0 — independent trainer app for your bike.", style = MaterialTheme.typography.bodyLarge)
+                Text("REHIT Rider 1.0 — free, independent trainer app for your bike. github.com/tnedev/rehit_rider", style = MaterialTheme.typography.bodyLarge)
                 Text("Power is calculated from this bike's own calibration. Training metrics use Coggan TSS/CTL/ATL, Tanaka max HR and the ACSM cycling VO₂ equation. Not medical advice: stop if you feel unwell.", color = C.muted)
             }
         }

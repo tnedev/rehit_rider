@@ -24,12 +24,12 @@ class PermissionsRationaleActivity : ComponentActivity() {
         setContent {
             RideTheme {
                 Column(Modifier.fillMaxSize().background(C.bg).padding(48.dp)) {
-                    Text("How Ride uses Health Connect", style = MaterialTheme.typography.headlineMedium)
+                    Text("How REHIT Rider uses Health Connect", style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        "Ride only writes data: after each ride it saves a stationary-bike workout with its duration, calories, " +
+                        "REHIT Rider only writes data: after each ride it saves a stationary-bike workout with its duration, calories, " +
                             "heart rate, power and cadence, so it shows up in Google Fit, Samsung Health and other apps you allow. " +
-                            "Ride does not read any health data and nothing leaves this device except through Health Connect.",
+                            "REHIT Rider does not read any health data and nothing leaves this device except through Health Connect.",
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     Spacer(Modifier.height(24.dp))
