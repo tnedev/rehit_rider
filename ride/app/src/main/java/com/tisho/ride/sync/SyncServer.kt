@@ -35,6 +35,7 @@ data class PairResponse(val token: String, val rider: String)
 data class SyncRide(
     val startedAt: Long, val durationSec: Int, val workoutName: String, val notes: String,
     val kcal: Double, val activeKcal: Double, val avgWatts: Double, val avgHr: Int,
+    val distanceM: Double = 0.0,
     /** Per-second samples as [t, watts, rpm, hr]. */
     val samples: List<List<Int>>,
 )
@@ -145,7 +146,7 @@ class SyncServer(private val context: Context, private val repo: Repository) {
         val match = synchronized(pending) {
             pending.remove(req.code)?.takeIf { it.expires >= System.currentTimeMillis() }
         } ?: return respond(out, 403, """{"error":"wrong or expired code"}""")
-        val profile = runBlocking { repo.db.profiles().get(match.profileId) } ?: return respond(out, 403, """{"error":"rider not found"}""")
+        val profile = runBlocking { repo.db.profiles().get(match.profileId) }?.takeIf { !it.guest } ?: return respond(out, 403, """{"error":"rider not found"}""")
         val token = ByteArray(24).also(random::nextBytes).joinToString("") { "%02x".format(it) }
         saveLinks(_links.value + PhoneLink(token, profile.id, req.device.take(60), System.currentTimeMillis()))
         respond(out, 200, repo.json.encodeToString(PairResponse.serializer(), PairResponse(token, profile.name)))
@@ -161,7 +162,7 @@ class SyncServer(private val context: Context, private val repo: Repository) {
             SyncResponse(
                 profile?.name ?: "",
                 rides.map { r ->
-                    SyncRide(r.startedAt, r.durationSec, r.workoutName, r.notes, r.kcal, r.activeKcal, r.avgWatts, r.avgHr,
+                    SyncRide(r.startedAt, r.durationSec, r.workoutName, r.notes, r.kcal, r.activeKcal, r.avgWatts, r.avgHr, r.distanceM,
                         repo.samples(r.id).map { listOf(it.t, it.watts.toInt(), it.rpm, it.hr) })
                 },
             )

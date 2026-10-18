@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -125,10 +126,10 @@ fun SummaryScreen(vm: AppViewModel, nav: NavHostController) {
             }
             Panel {
                 Label("How hard was it? (RPE)")
-                Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (i in 1..10) {
                         Box(
-                            Modifier.size(40.dp).clip(CircleShape).background(if (rpe == i) C.zones[((i + 1) / 2 + 1).coerceAtMost(6)] else C.surface2)
+                            Modifier.weight(1f).aspectRatio(1f).clip(CircleShape).background(if (rpe == i) C.zones[((i + 1) / 2 + 1).coerceAtMost(6)] else C.surface2)
                                 .clickable { rpe = i },
                             contentAlignment = Alignment.Center,
                         ) { Text("$i") }
@@ -175,21 +176,24 @@ private fun personalRecords(r: Ride, history: List<Ride>): List<String> {
 
 @Composable
 fun RideReport(r: Ride, samples: List<Sample>, p: Profile) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Panel(Modifier.weight(1f)) { Stat("Avg power", "${r.avgWatts.toInt()}", "W", C.power) }
-        Panel(Modifier.weight(1f)) { Stat("Normalized", "${r.normalizedWatts.toInt()}", "W", C.power) }
-        Panel(Modifier.weight(1f)) {
+    Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Panel(Modifier.weight(1f).fillMaxHeight()) { Stat("Avg power", "${r.avgWatts.toInt()}", "W", C.power) }
+        Panel(Modifier.weight(1f).fillMaxHeight()) { Stat("Normalized", "${r.normalizedWatts.toInt()}", "W", C.power) }
+        Panel(Modifier.weight(1f).fillMaxHeight()) {
             Stat("Calories", "${r.kcal.toInt()}", "kcal", C.accent)
-            Text("${r.activeKcal.toInt()} active · ${r.kj.toInt()} kJ work", color = C.muted)
+            Text("${r.activeKcal.toInt()} active", color = C.muted, maxLines = 1)
         }
-        Panel(Modifier.weight(1f)) { Stat("Training load", "${r.tss.toInt()}", "TSS", C.level) }
+        Panel(Modifier.weight(1f).fillMaxHeight()) { Stat("Training load", "${r.tss.toInt()}", "TSS", C.level) }
     }
     Spacer(Modifier.height(16.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Panel(Modifier.weight(1f)) { Stat("Max power", "${r.maxWatts.toInt()}", "W") }
-        Panel(Modifier.weight(1f)) { Stat("Avg cadence", "${r.avgRpm.toInt()}", "rpm", C.cadence) }
-        Panel(Modifier.weight(1f)) { Stat("Avg HR", if (r.avgHr > 0) "${r.avgHr}" else "—", "bpm", C.heart) }
-        Panel(Modifier.weight(1f)) { Stat("Max HR", if (r.maxHr > 0) "${r.maxHr}" else "—", "bpm", C.heart) }
+    Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Panel(Modifier.weight(1f).fillMaxHeight()) { Stat("Max power", "${r.maxWatts.toInt()}", "W") }
+        Panel(Modifier.weight(1f).fillMaxHeight()) {
+            Stat("Distance", "%.2f".format(r.distanceM / 1000), "km", C.cadence)
+            Text("${if (r.durationSec > 0) (r.distanceM / r.durationSec * 3.6).toInt() else 0} km/h avg", color = C.muted, maxLines = 1)
+        }
+        Panel(Modifier.weight(1f).fillMaxHeight()) { Stat("Avg HR", if (r.avgHr > 0) "${r.avgHr}" else "—", "bpm", C.heart) }
+        Panel(Modifier.weight(1f).fillMaxHeight()) { Stat("Max HR", if (r.maxHr > 0) "${r.maxHr}" else "—", "bpm", C.heart) }
     }
     Spacer(Modifier.height(16.dp))
     Panel {
@@ -257,7 +261,7 @@ fun HistoryScreen(vm: AppViewModel, nav: NavHostController) {
             item {
                 Row(Modifier.padding(top = 16.dp, bottom = 4.dp)) {
                     Text("Week of ${com.tisho.ride.ui.fmtDay(week)}", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    Text("${list.size} rides · ${list.sumOf { it.durationSec } / 60} min · ${list.sumOf { it.kcal }.toInt()} kcal · ${list.sumOf { it.tss }.toInt()} TSS", color = C.muted)
+                    Text("${list.size} rides · ${list.sumOf { it.durationSec } / 60} min · ${"%.1f".format(list.sumOf { it.distanceM } / 1000)} km · ${list.sumOf { it.kcal }.toInt()} kcal · ${list.sumOf { it.tss }.toInt()} TSS", color = C.muted)
                 }
             }
             items(list, key = { it.id }) { r ->
@@ -268,6 +272,7 @@ fun HistoryScreen(vm: AppViewModel, nav: NavHostController) {
                             Text(fmtDate(r.startedAt), color = C.muted)
                         }
                         Stat("Time", fmtTime(r.durationSec), modifier = Modifier.width(130.dp))
+                        Stat("Distance", "%.1f".format(r.distanceM / 1000), "km", C.cadence, Modifier.width(140.dp))
                         Stat("Avg", "${r.avgWatts.toInt()}", "W", C.power, Modifier.width(120.dp))
                         Stat("Energy", "${r.kcal.toInt()}", "kcal", C.accent, Modifier.width(130.dp))
                         Stat("HR", if (r.avgHr > 0) "${r.avgHr}" else "—", "bpm", C.heart, Modifier.width(120.dp))

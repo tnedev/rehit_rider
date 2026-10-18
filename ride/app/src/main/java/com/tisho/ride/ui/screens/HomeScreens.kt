@@ -75,7 +75,8 @@ fun HomeScreen(vm: AppViewModel, nav: NavHostController) {
     val weekRides = rides.filter { it.startedAt >= week }
     val minutes = weekRides.sumOf { Metrics.activeMinutes(it) }
     val load = Metrics.trainingLoad(rides).lastOrNull()?.second
-    val (rec, why) = recommend(rides, load)
+    val (recRaw, why) = recommend(rides, load)
+    val rec = WorkoutLibrary.byId(recRaw.id) ?: recRaw
 
     var info by remember { mutableStateOf<Workout?>(null) }
     val top3 = topWorkouts(rides, workouts)
@@ -146,8 +147,9 @@ fun WorkoutInfoDialog(w: Workout, p: Profile, onDismiss: () -> Unit, onOpen: () 
         title = { Text(w.name, style = MaterialTheme.typography.headlineSmall) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("${if (w.category == Category.FREE) "Open-ended" else "${w.minutes} min"} · intensity ${w.intensity}/5", color = C.accent, style = MaterialTheme.typography.titleMedium)
+                Text("${if (w.category == Category.FREE) "Open-ended" else if (w.openEnded) "about 20 min" else "${w.minutes} min"} · intensity ${w.intensity}/5", color = C.accent, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
+                if (w.protocol.isNotEmpty()) Text("Protocol: ${w.protocol}", color = C.muted, style = MaterialTheme.typography.bodyMedium)
                 Text(w.summary, style = MaterialTheme.typography.bodyLarge)
                 Spacer(Modifier.height(12.dp))
                 WorkoutProfile(w.steps, p.ftp, Modifier.fillMaxWidth().height(64.dp))
@@ -211,7 +213,7 @@ private fun RecommendCard(w: Workout, why: String, p: Profile, modifier: Modifie
             Label("Recommended today", C.text)
             Spacer(Modifier.height(8.dp))
             Text(w.name, style = MaterialTheme.typography.displaySmall)
-            Text("${w.minutes} min · ${"●".repeat(w.intensity)}${"○".repeat(5 - w.intensity)}", color = C.muted)
+            Text("${w.timeText.ifEmpty { "Open" }} · ${"●".repeat(w.intensity)}${"○".repeat(5 - w.intensity)}", color = C.muted)
             Spacer(Modifier.height(8.dp))
             Text(why, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.weight(1f))
@@ -231,7 +233,8 @@ private fun WorkoutCard(w: Workout, p: Profile, modifier: Modifier, onInfo: () -
     Panel(modifier.height(200.dp), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(w.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (w.category == Category.FREE) "∞" else "${w.minutes}′", style = MaterialTheme.typography.titleLarge, color = C.accent)
+            Spacer(Modifier.width(8.dp))
+            Text(w.timeText.ifEmpty { "∞" }, style = MaterialTheme.typography.titleMedium, color = C.accent, maxLines = 1)
             androidx.compose.material3.IconButton(onClick = onInfo, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Outlined.Info, "About ${w.name}", tint = C.muted)
             }
@@ -253,8 +256,9 @@ fun WorkoutDetailScreen(vm: AppViewModel, nav: NavHostController, id: String) {
     Row(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.weight(1.4f).verticalScroll(rememberScrollState())) {
             Text(w.name, style = MaterialTheme.typography.displaySmall)
+            if (w.protocol.isNotEmpty()) Text("Protocol: ${w.protocol}", color = C.muted, style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 12.dp)) {
-                Chip(if (w.category == Category.FREE) "Open" else "${w.minutes} min", C.cadence)
+                Chip(if (w.category == Category.FREE) "Open" else if (w.openEnded) "~20 min" else "${w.minutes} min", C.cadence)
                 Chip("Intensity ${w.intensity}/5", C.accent)
                 Chip(w.category.title, C.level)
             }
@@ -321,7 +325,7 @@ fun WorkoutDetailScreen(vm: AppViewModel, nav: NavHostController, id: String) {
 }
 
 fun describe(s: com.tisho.ride.workout.Step, ftp: Int): String = when (s.type) {
-    com.tisho.ride.workout.TargetType.LEVEL -> "Level ${s.value}"
+    com.tisho.ride.workout.TargetType.LEVEL -> "Difficulty ${com.tisho.ride.bike.PowerModel.difficultyForLevel(s.value)}"
     com.tisho.ride.workout.TargetType.FTP_PCT -> "${ftp * s.value / 100} W (${s.value}%)"
     com.tisho.ride.workout.TargetType.WATTS -> "${s.value} W"
     com.tisho.ride.workout.TargetType.SPRINT -> "All out"

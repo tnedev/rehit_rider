@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,7 +66,7 @@ fun ProfilesScreen(vm: AppViewModel, nav: NavHostController) {
         Text("Who's riding?", style = MaterialTheme.typography.displaySmall)
         Spacer(Modifier.height(48.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.Top) {
-            for (p in profiles) {
+            for (p in profiles.filterNot { it.guest }) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(150.dp)) {
                     Box {
                         Box(Modifier.border(4.dp, if (p.id == active?.id) C.accent else Color.Transparent, CircleShape).padding(6.dp)) {
@@ -81,6 +82,15 @@ fun ProfilesScreen(vm: AppViewModel, nav: NavHostController) {
                     Spacer(Modifier.height(12.dp))
                     Text(p.name, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
                 }
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(150.dp)) {
+                Box(
+                    Modifier.padding(6.dp).size(128.dp).clip(CircleShape).background(C.surface2).clickable { vm.startGuest { nav.navigate("home") { popUpTo(0) } } },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.PersonOutline, "Guest", tint = C.muted, modifier = Modifier.size(56.dp)) }
+                Spacer(Modifier.height(12.dp))
+                Text("Guest", style = MaterialTheme.typography.titleLarge, color = C.muted)
+                Text("No profile needed", style = MaterialTheme.typography.bodyMedium, color = C.muted)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(150.dp)) {
                 Box(
@@ -131,7 +141,7 @@ fun ProfileEditScreen(vm: AppViewModel, nav: NavHostController, id: Long, embedd
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(draft.copy(name = name.ifBlank { "?" }), 72.dp)
             Spacer(Modifier.width(20.dp))
-            Text(if (existing == null) "New rider" else if (embedded) "Your profile" else "Edit rider", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+            Text(if (existing == null) "New rider" else if (existing.guest) "Guest rider" else if (embedded) "Your profile" else "Edit rider", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             if (!embedded) TextButton(onClick = { nav.popBackStack() }) { Text("Cancel") }
             Button(
                 onClick = {
@@ -232,7 +242,11 @@ private fun FitnessCard(vm: AppViewModel, p: Profile) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(40.dp)) {
             com.tisho.ride.ui.Stat("VO₂max", "%.0f".format(fit.vo2), "ml/kg/min", C.cadence, big = true)
             com.tisho.ride.ui.Stat("Rating", com.tisho.ride.workout.Metrics.vo2Rating(fit.vo2, p.age, female), "for age ${p.age}")
-            com.tisho.ride.ui.Stat("Fitness age", "$fitnessAge", if (fitnessAge < p.age) "${p.age - fitnessAge} years younger" else if (fitnessAge > p.age) "${fitnessAge - p.age} years older" else "same as your age", C.accent)
+            com.tisho.ride.ui.Stat("Fitness age", "$fitnessAge", when {
+                fitnessAge < p.age -> "${p.age - fitnessAge} year${if (p.age - fitnessAge == 1) "" else "s"} younger"
+                fitnessAge > p.age -> "${fitnessAge - p.age} year${if (fitnessAge - p.age == 1) "" else "s"} older"
+                else -> "same as your age"
+            }, C.accent)
         }
         Spacer(Modifier.height(8.dp))
         Text("Based on ${fit.source}.", color = C.muted)

@@ -17,6 +17,10 @@ tablet.
   - After every ride it adapts to your cadence at the end of each sprint.
 - **ERG mode:** interval targets are set as a percentage of your FTP, and the bike adjusts resistance to hold the watts whatever your cadence.
 - **Several riders:** "Who's riding?" at launch, with separate profiles, history and progress.
+- **Guest riding:** anyone can ride without creating a profile; guest rides stay out of the leaderboard and syncing.
+- **Virtual distance and speed** from your power, using the same road-physics model as indoor cycling apps.
+- **Simple difficulty control:** 0–20, one step per tap, with the bike following behind.
+- **Workouts named by what they do:** for example "Fat burn · 30 min" or "Heart & VO₂max · 40 min", with the protocol name (Norwegian 4×4, Tabata and so on) shown as a subtitle.
 - **Riders leaderboard:** a 1,000-point score that is fair across ages and body sizes. It combines fitness for your age, consistency, sprint power per kg, and improvement.
 - **Live ride screen:**
   - power, cadence, heart rate (from the bike's hand grips or any Bluetooth strap) and resistance

@@ -42,6 +42,8 @@ data class Profile(
     val weeklyGoalMinutes: Int = 150,
     /** Write this rider's rides to Health Connect (Google Fit / Samsung Health). */
     val healthSync: Boolean = false,
+    /** Shared guest rider: no setup, not on the leaderboard, never synced. */
+    val guest: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
 ) {
     val age: Int get() = Calendar.getInstance().get(Calendar.YEAR) - birthYear
@@ -64,6 +66,8 @@ data class Ride(
     /** Total (gross) energy, personalised; see workout.EnergyModel. */
     val kcal: Double,
     val activeKcal: Double = 0.0,
+    /** Virtual road distance from power, metres. */
+    val distanceM: Double = 0.0,
     val avgWatts: Double,
     val maxWatts: Double,
     val normalizedWatts: Double,
@@ -158,7 +162,7 @@ interface CustomWorkoutDao {
     @Query("DELETE FROM CustomWorkout WHERE id = :id") suspend fun delete(id: Long)
 }
 
-@Database(entities = [Profile::class, Ride::class, Sample::class, CustomWorkout::class], version = 3, exportSchema = false)
+@Database(entities = [Profile::class, Ride::class, Sample::class, CustomWorkout::class], version = 5, exportSchema = false)
 abstract class RideDb : RoomDatabase() {
     abstract fun profiles(): ProfileDao
     abstract fun rides(): RideDao
@@ -178,6 +182,19 @@ abstract class RideDb : RoomDatabase() {
             }
         }
 
-        fun create(context: Context) = Room.databaseBuilder(context, RideDb::class.java, "ride.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE Ride ADD COLUMN distanceM REAL NOT NULL DEFAULT 0")
+            }
+        }
+
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE Profile ADD COLUMN guest INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        fun create(context: Context) = Room.databaseBuilder(context, RideDb::class.java, "ride.db")
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
     }
 }

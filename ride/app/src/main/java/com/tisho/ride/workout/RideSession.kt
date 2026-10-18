@@ -20,6 +20,10 @@ import kotlin.math.roundToInt
 
 enum class Phase { COUNTDOWN, RUNNING, PAUSED, FINISHED }
 
+/** − / + step sizes: 5 levels (of 100) on level steps, 10 W on ERG steps. */
+const val LEVEL_STEP = 5
+const val WATT_STEP = 10
+
 data class RideState(
     val phase: Phase = Phase.COUNTDOWN,
     val countdown: Int = 3,
@@ -38,6 +42,12 @@ data class RideState(
     val avgWatts: Double = 0.0,
     val maxWatts: Double = 0.0,
     val autoPaused: Boolean = false,
+    /** Resistance level the rider/workout asked for (shown immediately). */
+    val targetLevel: Int = 0,
+    /** True while the brake motor is still travelling to [targetLevel]. */
+    val moving: Boolean = false,
+    val speedKmh: Double = 0.0,
+    val distanceM: Double = 0.0,
     val wattsHistory: List<Float> = emptyList(),
     val hrHistory: List<Int> = emptyList(),
     val rpmHistory: List<Int> = emptyList(),
@@ -94,6 +104,7 @@ class RideSession(
     private var sprintPeak = 0
     private var finishedResult: SessionResult? = null
     private val energy = EnergyModel(profile)
+    private val virtualSpeed = VirtualSpeed(profile.weightKg)
 
     val steps: List<Step> get() = workout.steps
     val currentStep: Step get() = steps[_state.value.stepIndex.coerceIn(0, steps.lastIndex)]
@@ -125,9 +136,9 @@ class RideSession(
     fun nudge(up: Boolean) {
         val d = if (up) 1 else -1
         when (currentStep.type) {
-            TargetType.FREE -> freeLevel = (freeLevel + d * 2).coerceIn(0, PowerModel.MAX_LEVEL)
-            TargetType.LEVEL -> levelOffset = (levelOffset + d * 2).coerceIn(-40, 40)
-            TargetType.FTP_PCT, TargetType.WATTS -> wattOffset = (wattOffset + d * 5).coerceIn(-200, 300)
+            TargetType.FREE -> freeLevel = (freeLevel + d * LEVEL_STEP).coerceIn(0, PowerModel.MAX_LEVEL)
+            TargetType.LEVEL -> levelOffset = (levelOffset + d * LEVEL_STEP).coerceIn(-60, 60)
+            TargetType.FTP_PCT, TargetType.WATTS -> wattOffset = (wattOffset + d * WATT_STEP).coerceIn(-300, 400)
             TargetType.SPRINT -> {}
         }
         control()
@@ -157,18 +168,19 @@ class RideSession(
             TargetType.FTP_PCT, TargetType.WATTS -> {
                 val w = max(10, (if (step.type == TargetType.WATTS) step.value else profile.ftp * step.value / 100) + wattOffset)
                 target = w
-                val rpmForErg = if (smoothRpm < 20) 75 else max(50, smoothRpm.roundToInt())
-                power.innateFor(w.toDouble(), rpmForErg)
+                // While the pedals are (nearly) still, hold the current resistance instead of guessing.
+                if (smoothRpm < 20 && bike.resistance > 0) bike.resistance
+                else power.innateFor(w.toDouble(), if (smoothRpm < 20) 75 else max(50, smoothRpm.roundToInt()))
             }
         }
-        val phase = _state.value.phase
-        val desired = if (phase == Phase.RUNNING || phase == Phase.COUNTDOWN) innate else 0
-        if (step.type !in listOf(TargetType.FTP_PCT, TargetType.WATTS) || abs(desired - bike.resistance) >= 3 || desired == 0) {
-            bike.setResistance(desired)
-        }
+        // Resistance is kept through pauses (dropping to 0 made it lag on restart); only finishing releases it.
+        val desired = innate
+        val erg = step.type == TargetType.FTP_PCT || step.type == TargetType.WATTS
+        if (!erg || abs(desired - bike.resistance) >= 3) bike.setResistance(desired)
         _state.value = _state.value.copy(
             rpm = t.rpm, watts = t.watts, level = PowerModel.levelForInnate(t.innate), hr = hr,
             hrFromStrap = strap > 0, targetWatts = target,
+            targetLevel = PowerModel.levelForInnate(bike.resistance), moving = abs(t.innate - bike.resistance) > 3,
         )
     }
 
@@ -202,12 +214,15 @@ class RideSession(
 
         val kj = st.kj + w / 1000.0
         val burned = energy.kcalPerSecond(st.watts, st.hr)
+        val metres = virtualSpeed.step(st.watts)
         _state.value = st.copy(
             elapsed = st.elapsed + 1,
             stepElapsed = st.stepElapsed + 1,
             kj = kj,
             kcal = st.kcal + burned,
             activeKcal = st.activeKcal + (burned - energy.bmrPerSecond).coerceAtLeast(0.0),
+            distanceM = st.distanceM + metres,
+            speedKmh = virtualSpeed.speed * 3.6,
             avgWatts = kj * 1000 / (st.elapsed + 1),
             maxWatts = max(st.maxWatts, st.watts),
             wattsHistory = (st.wattsHistory + w).takeLast(600),
@@ -264,12 +279,13 @@ class RideSession(
         val ride = Ride(
             profileId = profile.id,
             workoutId = workout.id,
-            workoutName = workout.name,
+            workoutName = workout.label,
             startedAt = startedAt,
             durationSec = dur,
             kj = st.kj,
             kcal = st.kcal,
             activeKcal = st.activeKcal,
+            distanceM = st.distanceM,
             avgWatts = if (dur > 0) st.kj * 1000 / dur else 0.0,
             maxWatts = watts.maxOrNull()?.toDouble() ?: 0.0,
             normalizedWatts = np,

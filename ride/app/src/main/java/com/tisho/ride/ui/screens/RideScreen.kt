@@ -94,10 +94,10 @@ fun RideScreen(vm: AppViewModel, nav: NavHostController) {
             // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(session.workout.name, style = MaterialTheme.typography.headlineSmall)
+                    Text(session.workout.label, style = MaterialTheme.typography.headlineSmall)
                     Text(if (open) "Ride time ${fmtTime(st.elapsed)}" else "${fmtTime(st.elapsed)} / ${fmtTime(total)}", color = C.muted, style = MaterialTheme.typography.titleMedium)
                 }
-                Text("${st.kcal.toInt()} kcal (${st.activeKcal.toInt()} active) · ${st.kj.toInt()} kJ · avg ${st.avgWatts.toInt()} W", color = C.muted, style = MaterialTheme.typography.titleMedium)
+                Text("${"%.2f".format(st.distanceM / 1000)} km · ${st.speedKmh.toInt()} km/h · ${st.kcal.toInt()} kcal · avg ${st.avgWatts.toInt()} W", color = C.muted, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 Spacer(Modifier.width(24.dp))
                 OutlinedButton(onClick = { session.togglePause() }) {
                     Icon(if (st.phase == Phase.PAUSED) Icons.Filled.PlayArrow else Icons.Filled.Pause, null)
@@ -140,7 +140,7 @@ fun RideScreen(vm: AppViewModel, nav: NavHostController) {
                         val zone = Metrics.hrZone(st.hr, p.maxHr)
                         Metric("Heart rate", if (st.hr > 0) "${st.hr}" else "—", "bpm", if (zone > 0) C.zones[zone] else C.heart, Modifier.weight(1f),
                             sub = if (st.hr > 0) "${Metrics.hrZoneNames[zone]} · ${st.hr * 100 / p.maxHr}% max" + if (!st.hrFromStrap) " · grips" else "" else "hold grips or pair strap")
-                        LevelControl(st.level, step.type, Modifier.weight(1f), onMinus = { session.nudge(false) }, onPlus = { session.nudge(true) })
+                        LevelControl(st.targetLevel, st.level, st.moving, step.type, st.targetWatts, Modifier.weight(1f), onMinus = { session.nudge(false) }, onPlus = { session.nudge(true) })
                     }
                 }
             }
@@ -207,22 +207,41 @@ private fun Metric(label: String, value: String, unit: String, color: Color, mod
             Text(value, style = MaterialTheme.typography.displayLarge, color = if (warn) C.power else C.text, lineHeight = 96.sp)
             Text(" $unit", style = MaterialTheme.typography.titleLarge, color = C.muted, modifier = Modifier.padding(bottom = 16.dp))
         }
-        Text(sub, color = C.muted, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+        Text(sub, color = C.muted, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 
 @Composable
-private fun LevelControl(level: Int, type: TargetType, modifier: Modifier, onMinus: () -> Unit, onPlus: () -> Unit) {
-    Column(modifier.fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(C.surface).padding(22.dp)) {
-        Label("Resistance", C.level)
-        Spacer(Modifier.weight(1f))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("$level", style = MaterialTheme.typography.displayLarge, color = C.text, modifier = Modifier.weight(1f), lineHeight = 96.sp)
-            if (type != TargetType.SPRINT) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                FilledIconButton(onClick = onPlus, modifier = Modifier.size(72.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = C.surface2)) { Icon(Icons.Filled.Add, "Harder", modifier = Modifier.size(36.dp)) }
-                FilledIconButton(onClick = onMinus, modifier = Modifier.size(72.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = C.surface2)) { Icon(Icons.Filled.Remove, "Easier", modifier = Modifier.size(36.dp)) }
-            }
+private fun LevelControl(target: Int, actual: Int, moving: Boolean, type: TargetType, targetWatts: Int?, modifier: Modifier, onMinus: () -> Unit, onPlus: () -> Unit) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val tap = { f: () -> Unit -> { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); f() } }
+    val erg = type == TargetType.FTP_PCT || type == TargetType.WATTS
+    Column(modifier.fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(C.surface).padding(horizontal = 22.dp, vertical = 18.dp)) {
+        Label(if (erg) "Target power" else "Difficulty", C.level)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                if (erg && targetWatts != null) "$targetWatts" else "${com.tisho.ride.bike.PowerModel.difficultyForLevel(target)}",
+                style = MaterialTheme.typography.displayMedium, color = C.text, maxLines = 1,
+            )
+            Text(if (erg) " W" else " / ${com.tisho.ride.bike.PowerModel.MAX_DIFFICULTY}", style = MaterialTheme.typography.titleLarge, color = C.muted, modifier = Modifier.padding(bottom = 10.dp))
         }
-        Text(when (type) { TargetType.FTP_PCT, TargetType.WATTS -> "ERG · ± changes target 5 W"; TargetType.SPRINT -> "Sprint load (adaptive)"; else -> "of 100" }, color = C.muted, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.weight(1f))
+        if (type != TargetType.SPRINT) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FilledIconButton(onClick = tap(onMinus), modifier = Modifier.weight(1f).height(64.dp), shape = RoundedCornerShape(32.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = C.surface2, contentColor = C.text)) { Icon(Icons.Filled.Remove, "Easier", modifier = Modifier.size(36.dp)) }
+            FilledIconButton(onClick = tap(onPlus), modifier = Modifier.weight(1f).height(64.dp), shape = RoundedCornerShape(32.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = C.accent, contentColor = C.onAccent)) { Icon(Icons.Filled.Add, "Harder", modifier = Modifier.size(36.dp)) }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            when {
+                type == TargetType.SPRINT -> "Sprint load · adapts to you"
+                moving -> "Bike adjusting…"
+                erg -> "± 10 W per tap"
+                else -> "± 1 per tap"
+            },
+            color = if (moving) C.level else C.muted, style = MaterialTheme.typography.titleMedium, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }

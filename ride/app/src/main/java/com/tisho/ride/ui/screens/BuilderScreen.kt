@@ -126,16 +126,17 @@ fun BuilderScreen(vm: AppViewModel, nav: NavHostController, id: Long) {
 @Composable
 private fun StepEditor(s: Step, ftp: Int, onChange: (Step) -> Unit, onDelete: () -> Unit, onCopy: () -> Unit, onUp: () -> Unit, onDown: () -> Unit) {
     Panel(padding = 14.dp) {
+        OutlinedTextField(s.label, { onChange(s.copy(label = it)) }, singleLine = true, modifier = Modifier.fillMaxWidth(), label = { Text("Step name") })
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(s.label, { onChange(s.copy(label = it)) }, singleLine = true, modifier = Modifier.weight(1f), label = { Text("Label") })
-            Spacer(Modifier.width(10.dp))
             Stepper("Time", fmtTime(s.seconds), { onChange(s.copy(seconds = (s.seconds - if (s.seconds > 60) 30 else 5).coerceAtLeast(5))) }, { onChange(s.copy(seconds = s.seconds + if (s.seconds >= 60) 30 else 5)) })
             if (s.type != TargetType.SPRINT && s.type != TargetType.FREE) {
                 Spacer(Modifier.width(10.dp))
                 val unit = when (s.type) { TargetType.FTP_PCT -> "%"; TargetType.WATTS -> " W"; else -> "" }
-                Stepper(if (s.type == TargetType.LEVEL) "Level" else "Target", "${s.value}$unit",
+                Stepper(if (s.type == TargetType.LEVEL) "Difficulty" else "Target",
+                    if (s.type == TargetType.LEVEL) "${com.tisho.ride.bike.PowerModel.difficultyForLevel(s.value)}" else "${s.value}$unit",
                     { onChange(s.copy(value = (s.value - 5).coerceAtLeast(0))) }, { onChange(s.copy(value = s.value + 5)) })
             }
+            Spacer(Modifier.weight(1f))
             IconButton(onClick = onUp) { Icon(Icons.Filled.KeyboardArrowUp, "Up") }
             IconButton(onClick = onDown) { Icon(Icons.Filled.KeyboardArrowDown, "Down") }
             IconButton(onClick = onCopy) { Icon(Icons.Filled.ContentCopy, "Duplicate") }

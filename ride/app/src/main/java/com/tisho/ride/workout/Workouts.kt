@@ -55,8 +55,14 @@ data class Workout(
     /** Open-ended ramp: keeps adding steps until the rider stops. */
     val openEnded: Boolean = false,
     val intensity: Int = 3,
+    /** Technical protocol name (e.g. "Norwegian 4×4"), shown as a subtitle. */
+    val protocol: String = "",
 ) {
     val seconds: Int get() = steps.sumOf { it.seconds }
+    /** Duration text: "40 min", "~20 min" for open-ended tests, "" for free rides. */
+    val timeText: String get() = when { category == Category.FREE -> ""; openEnded -> "~20 min"; else -> "$minutes min" }
+    /** Full label used for saved rides and the ride screen, e.g. "Fat burn · 30 min". */
+    val label: String get() = if (timeText.isEmpty()) name else "$name · $timeText"
     val minutes: Int get() = (seconds + 30) / 60
 
     /** All-out or VO₂max-level work: needs a clear health check (PAR-Q+) first. */
@@ -358,9 +364,26 @@ object WorkoutLibrary {
 
     val ramp = ramp()
 
+    /** Plain names by what each workout does; the protocol name moves to a subtitle. */
+    private val functionNames = mapOf(
+        "rehit" to "REHIT sprints", "rehit10" to "REHIT starter", "rehit15" to "REHIT build", "rehit3" to "REHIT 3 sprints",
+        "micro6" to "Gentle sprints", "tabata" to "Tabata blast", "sit4x30" to "Max sprints",
+        "4x4" to "Heart & VO₂max", "4x8" to "Long VO₂max intervals", "5x3" to "VO₂max boost", "10x1" to "Beginner intervals",
+        "60-30" to "Aerobic power", "30-15" to "Advanced intervals", "40-20" to "Microbursts", "overunder" to "Threshold surges",
+        "pyramid" to "Pyramid intervals", "sweetspot" to "Endurance builder", "2x20" to "Threshold power",
+        "hills" to "Rolling hills", "torque" to "Strength endurance", "zone2-30" to "Fat burn", "zone2-45" to "Fat burn",
+        "zone2-60" to "Fat burn", "steady30" to "Steady cardio", "recovery" to "Recovery spin",
+        "ramp" to "Fitness test", "ftp20" to "20-min fitness test",
+    )
+
+    private fun named(w: Workout): Workout {
+        val fn = functionNames[w.id] ?: return w
+        return w.copy(name = fn, protocol = w.name)
+    }
+
     val all: List<Workout> = listOf(rehit, rehit10, rehit15, rehit3, microSprints, tabata, sit4x30, norwegian, seiler4x8, vo2_5x3,
         tenByOne, sixtyThirty, thirtyFifteen, microbursts, overUnders, pyramid, sweetSpot, threshold, hills, torque, zone2short, zone2,
-        zone2long, fatBurn, recovery, ramp, ftp20, freeRide, ergRide)
+        zone2long, fatBurn, recovery, ramp, ftp20, freeRide, ergRide).map(::named)
 
     fun byId(id: String) = all.firstOrNull { it.id == id }
 }

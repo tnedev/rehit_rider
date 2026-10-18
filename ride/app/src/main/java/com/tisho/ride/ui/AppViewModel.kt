@@ -52,7 +52,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Every rider's score for the leaderboard. */
     val leaderboard: StateFlow<List<Metrics.RiderScore>> = combine(profiles, repo.db.rides().all()) { ps, all ->
         val byRider = all.groupBy { it.profileId }
-        ps.map { Metrics.riderScore(it, byRider[it.id].orEmpty()) }.sortedByDescending { it.total }
+        ps.filterNot { it.guest }.map { Metrics.riderScore(it, byRider[it.id].orEmpty()) }.sortedByDescending { it.total }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     var session: RideSession? = null
@@ -71,6 +71,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectProfile(id: Long) = repo.updateSettings(settings.value.copy(activeProfile = id))
+
+    /** Ride as the shared guest rider (created on first use with average defaults). */
+    fun startGuest(onReady: () -> Unit) = viewModelScope.launch {
+        val existing = profiles.value.firstOrNull { it.guest }
+        val id = existing?.id ?: repo.saveProfile(Profile(name = "Guest", color = 7, guest = true))
+        selectProfile(id)
+        onReady()
+    }
 
     fun saveProfile(p: Profile, select: Boolean = false) = viewModelScope.launch {
         val id = repo.saveProfile(p)
@@ -100,7 +108,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun startRide(w: Workout): RideSession? {
         val p = profile.value ?: return null
         session?.finish()
-        val workout = if (w.id == "ramp") WorkoutLibrary.ramp(if (p.weightKg < 60 || p.age >= 60) 10 else 20) else w
+        val workout = if (w.id == "ramp") WorkoutLibrary.ramp(if (p.weightKg < 60 || p.age >= 60) 10 else 20).copy(name = w.name, protocol = w.protocol) else w
         return RideSession(viewModelScope, bike, hrm, power, p, workout, cues).also { session = it; it.start() }
     }
 
@@ -124,7 +132,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val id = repo.saveRide(r.ride, r.samples)
         // Always the rider who rode, read fresh from the database, never whoever is selected now.
         val p = repo.db.profiles().get(r.ride.profileId)
-        if (p?.healthSync == true) health.write(r.ride, r.samples, r.ride.workoutName)
+        if (p?.healthSync == true && !p.guest) health.write(r.ride, r.samples, r.ride.workoutName)
         if (p != null && r.newSprintInnate != null && r.newSprintInnate != p.sprintInnate) repo.saveProfile(p.copy(sprintInnate = r.newSprintInnate))
         return id
     }

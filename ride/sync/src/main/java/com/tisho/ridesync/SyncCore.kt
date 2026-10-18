@@ -9,6 +9,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.CyclingPedalingCadenceRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.PowerRecord
@@ -17,6 +18,7 @@ import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.units.Length
 import androidx.health.connect.client.units.Power
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -43,6 +45,7 @@ import kotlin.coroutines.resume
 @Serializable data class SyncRide(
     val startedAt: Long, val durationSec: Int, val workoutName: String, val notes: String,
     val kcal: Double, val activeKcal: Double, val avgWatts: Double, val avgHr: Int,
+    val distanceM: Double = 0.0,
     val samples: List<List<Int>>,
 )
 @Serializable data class SyncResponse(val rider: String, val rides: List<SyncRide>)
@@ -138,6 +141,7 @@ object Health {
         HealthPermission.getWritePermission(HeartRateRecord::class),
         HealthPermission.getWritePermission(PowerRecord::class),
         HealthPermission.getWritePermission(CyclingPedalingCadenceRecord::class),
+        HealthPermission.getWritePermission(DistanceRecord::class),
     )
 
     fun available(context: Context) = HealthConnectClient.getSdkStatus(context, PROVIDER) == HealthConnectClient.SDK_AVAILABLE
@@ -154,6 +158,7 @@ object Health {
         records += ExerciseSessionRecord(start, zone, end, zone, meta("session"), ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY,
             "REHIT Rider · ${r.workoutName}", r.notes.ifBlank { null })
         records += TotalCaloriesBurnedRecord(start, zone, end, zone, Energy.kilocalories(r.kcal), meta("total"))
+        if (r.distanceM > 0) records += DistanceRecord(start, zone, end, zone, Length.meters(r.distanceM), meta("distance"))
         if (r.activeKcal > 0) records += ActiveCaloriesBurnedRecord(start, zone, end, zone, Energy.kilocalories(r.activeKcal), meta("active"))
         r.samples.chunked(600).forEachIndexed { i, chunk ->
             val cs = start.plusSeconds(chunk.first()[0].toLong())

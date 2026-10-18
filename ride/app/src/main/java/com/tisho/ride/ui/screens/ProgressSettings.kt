@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -147,6 +148,7 @@ fun ProgressScreen(vm: AppViewModel, nav: NavHostController) {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     Stat("Rides", "${rides.size}")
                     Stat("Hours", "%.1f".format(rides.sumOf { it.durationSec } / 3600.0))
+                    Stat("km", "%.0f".format(rides.sumOf { it.distanceM } / 1000), color = C.cadence)
                     Stat("kcal", "${rides.sumOf { it.kcal }.toInt()}", color = C.accent)
                 }
                 Spacer(Modifier.height(10.dp))
@@ -228,10 +230,12 @@ fun SettingsScreen(vm: AppViewModel, nav: NavHostController) {
                     }
                 }
             }
-            SectionTitle("Sync to my phone")
-            PhonePanel(vm)
-            SectionTitle("Health Connect on this tablet")
-            HealthPanel(vm)
+            if (profile?.guest != true) {
+                SectionTitle("Sync to my phone")
+                PhonePanel(vm)
+                SectionTitle("Health Connect on this tablet")
+                HealthPanel(vm)
+            }
             SectionTitle("Appearance")
             Panel {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -269,14 +273,14 @@ fun SettingsScreen(vm: AppViewModel, nav: NavHostController) {
                 Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                     Stat("Cadence", "${t.rpm}", "rpm", C.cadence)
                     Stat("Power", "${t.watts.toInt()}", "W", C.power)
-                    Stat("Level", "${PowerModel.levelForInnate(t.innate)}", "(${t.innate})", C.level)
+                    Stat("Difficulty", "${PowerModel.difficultyForLevel(PowerModel.levelForInnate(t.innate))}", "of 20 (raw ${t.innate})", C.level)
                     Stat("Grip HR", if (t.gripHr > 0) "${t.gripHr}" else "—", "bpm", C.heart)
                 }
                 Spacer(Modifier.height(16.dp))
                 Label("Resistance test")
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Slider(testLevel, { testLevel = it }, valueRange = 0f..100f, modifier = Modifier.weight(1f),
-                        onValueChangeFinished = { vm.bike.setResistance(PowerModel.innateForLevel(testLevel.toInt())) })
+                    Slider(testLevel, { testLevel = it }, valueRange = 0f..20f, steps = 19, modifier = Modifier.weight(1f),
+                        onValueChangeFinished = { vm.bike.setResistance(PowerModel.innateForLevel(testLevel.toInt() * 5)) })
                     Text("  ${testLevel.toInt()}", style = MaterialTheme.typography.titleMedium)
                 }
                 Text("The motor moves at most every 2 s to protect it. Set back to 0 when done.", color = C.muted)
@@ -385,7 +389,7 @@ private fun HealthPanel(vm: AppViewModel) {
 
 @Composable
 private fun ToggleRow(title: String, sub: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(sub, color = C.muted)

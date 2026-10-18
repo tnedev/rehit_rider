@@ -38,6 +38,10 @@ class PowerModel(context: Context) {
         fun innateForLevel(level: Int): Int = if (level <= 0) 0 else (6 + (2.14 * level.coerceAtMost(MAX_LEVEL)).roundToInt()).coerceAtMost(MAX_INNATE)
         fun levelForInnate(innate: Int): Int = if (innate <= 0) 0 else ((innate - 6) / 2.14).roundToInt().coerceIn(0, MAX_LEVEL)
 
+        /** User-facing difficulty 0..20: one step per − / + tap, 5 levels of the 0..100 scale behind it. */
+        const val MAX_DIFFICULTY = 20
+        fun difficultyForLevel(level: Int): Int = Math.round(level / 5f).coerceIn(0, MAX_DIFFICULTY)
+
         /** Display resistance used by the original app's charts. */
         fun standardResistance(innate: Int): Int = when {
             innate <= 0 -> 0

@@ -9,6 +9,7 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.CyclingPedalingCadenceRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.PowerRecord
@@ -17,6 +18,7 @@ import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.units.Length
 import androidx.health.connect.client.units.Power
 import com.tisho.ride.data.Ride
 import com.tisho.ride.data.Sample
@@ -36,6 +38,7 @@ class HealthSync(private val context: Context) {
         HealthPermission.getWritePermission(HeartRateRecord::class),
         HealthPermission.getWritePermission(PowerRecord::class),
         HealthPermission.getWritePermission(CyclingPedalingCadenceRecord::class),
+        HealthPermission.getWritePermission(DistanceRecord::class),
     )
 
     enum class Availability { AVAILABLE, NEEDS_INSTALL, UNSUPPORTED }
@@ -66,6 +69,7 @@ class HealthSync(private val context: Context) {
         val records = ArrayList<Record>()
         records += ExerciseSessionRecord(start, zone, end, zone, meta("session"), ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY, title, ride.notes.ifBlank { null })
         records += TotalCaloriesBurnedRecord(start, zone, end, zone, Energy.kilocalories(ride.kcal), meta("total"))
+        if (ride.distanceM > 0) records += DistanceRecord(start, zone, end, zone, Length.meters(ride.distanceM), meta("distance"))
         if (ride.activeKcal > 0) records += ActiveCaloriesBurnedRecord(start, zone, end, zone, Energy.kilocalories(ride.activeKcal), meta("active"))
 
         // Series records in 10-minute chunks.
